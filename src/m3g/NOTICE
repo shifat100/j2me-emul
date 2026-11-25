@@ -1,0 +1,9 @@
+native/ is the Nokia M3G (JSR-184) engine taken from J2ME Loader
+(https://github.com/nikita36078/J2ME-Loader), Copyright (c) Nokia Corporation,
+licensed under the Eclipse Public License v1.0.
+java/javax/microedition/m3g is ported from J2ME Loader (Apache License 2.0,
+see LICENSE-J2ME-Loader).
+web/tinf* is tinf by Joergen Ibsen (zlib license).
+Changes: engine built to WebAssembly (bld/m3g.wasm) with GLES 1.1 / EGL / JNI
+replaced by JS imports; rendering goes through the GLES 1.1 emulator over
+WebGL in bld/m3g.js; Java side adapted to CLDC (int handles, lcdui targets).

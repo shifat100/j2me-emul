@@ -1,0 +1,5 @@
+com/mascotcapsule/micro3d/v3 is ported from J2ME Loader
+(https://github.com/nikita36078/J2ME-Loader), Copyright 2020 Yury Kharchenko,
+licensed under the Apache License 2.0 (see LICENSE-J2ME-Loader).
+Changes: adapted to CLDC (no generics, lambdas, java.nio, Android APIs),
+OpenGL ES / EGL replaced by WebGL natives in bld/micro3d.js.
