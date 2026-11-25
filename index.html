@@ -15,6 +15,39 @@
       }
     });
   </script>
+  <script>
+  // 1. Service Worker Register
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function (err) {
+        console.warn('SW error:', err);
+      });
+    });
+  }
+
+  // 2. Option 2 wrapper-ke janano je page load hoyeche (Online ba Offline Cache theke)
+  function notifyWrapperReady() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'J2ME_READY' }, '*');
+    }
+  }
+  window.addEventListener('DOMContentLoaded', notifyWrapperReady);
+  window.addEventListener('load', notifyWrapperReady);
+
+  // 3. KaiOS 3.0 / 4.0 Backspace -> 'back' bridge
+  window.addEventListener('keydown', function (event) {
+    if (event.key === 'Backspace') {
+      var tag = document.activeElement && document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      var backEvt = new CustomEvent('back', { cancelable: true });
+      window.dispatchEvent(backEvt);
+      if (backEvt.defaultPrevented) {
+        event.preventDefault();
+      }
+    }
+  });
+  </script>
   <script src="config/i18n.js"></script>
 </head>
 <body class="kaios-ui">
