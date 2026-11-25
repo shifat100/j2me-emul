@@ -1,8 +1,0 @@
-__pycache__/
-*.pyc
-.env
-src/m3g/obj/
-.DS_Store
-Thumbs.db
-*.swp
-jar/*.jar
