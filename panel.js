@@ -1,18 +1,16 @@
 (function () {
   var id = config.gameId;
-  var PTR_DOWN = "PointerEvent" in window ? "pointerdown" : "mousedown";
-  var gear = el("button", "", { id: "gear", type: "button", title: tr("Настройки игры", "Game settings") });
   var panel = el("div", "", { id: "panel", hidden: true });
   var box = el("div", "panel-box", { tabIndex: -1 });
-  var skBar = el("div", "kaios-softkeys", { id: "panel-softkeys" });
-  var skLeft = el("button", "kaios-sk-btn kaios-sk-left", { type: "button" });
-  var skCenter = el("button", "kaios-sk-btn kaios-sk-center", { type: "button" });
-  var skRight = el("button", "kaios-sk-btn kaios-sk-right", { type: "button" });
+  var skBar = el("div", "kai-softkeys", { id: "panel-softkeys" });
+  var skLeft = el("span", "sk-l");
+  var skCenter = el("span", "sk-c");
+  var skRight = el("span", "sk-r");
   var toast = el("div", "", { id: "kaios-toast", hidden: true });
 
   append(skBar, skLeft, skCenter, skRight);
   append(panel, box, skBar);
-  append(document.body, gear, panel, toast);
+  append(document.body, panel, toast);
 
   var startSize = null, btKey = "", btStatus = null, page = "main";
   var state = Settings.resolve(id);
@@ -53,7 +51,7 @@
   }
 
   function pretty(s) {
-    return s ? s.replace("x", " × ") : tr("окно", "window");
+    return s ? s.replace("x", " × ") : tr("По окну", "Window");
   }
 
   function canvasSize() {
@@ -76,12 +74,8 @@
 
   var apply = {
     scale: function (v) {
+      config.scaleMode = v === "101" ? "stretch" : v === "100" ? "fit" : "num";
       config.scale = parseFloat(v) || 1;
-      ScreenSetup.refit();
-    },
-    keypad: function (v) {
-      config.keypad = v | 0;
-      document.getElementById("keypad").className = "keypad-" + config.keypad;
       ScreenSetup.refit();
     },
     rotate: function (v) {
@@ -113,13 +107,12 @@
     if (!target || !box) return;
     var bRect = box.getBoundingClientRect();
     var tRect = target.getBoundingClientRect();
-    var bottomPad = skBar.hidden ? 8 : 34;
     if (tRect.top < bRect.top + 4) box.scrollTop -= (bRect.top + 4 - tRect.top);
-    else if (tRect.bottom > bRect.bottom - bottomPad) box.scrollTop += (tRect.bottom - (bRect.bottom - bottomPad));
+    else if (tRect.bottom > bRect.bottom - 32) box.scrollTop += (tRect.bottom - (bRect.bottom - 32));
   }
 
   function focusables() {
-    var list = Array.prototype.slice.call(box.querySelectorAll("button:not(:disabled), select:not(:disabled), input:not(:disabled)"));
+    var list = Array.prototype.slice.call(box.querySelectorAll(".kai-item:not(.disabled), select:not(:disabled), input:not(:disabled)"));
     return list.filter(function (node) { return node.offsetParent !== null; });
   }
 
@@ -147,21 +140,21 @@
         }
       }
     }
-    if (!match) {
-      for (var j = 0; j < list.length; j++) {
-        if (!list[j].classList.contains("pb-close")) {
-          match = list[j];
-          break;
-        }
-      }
-    }
     setFocusEl(match || list[0]);
   }
 
+  function kaiItem(label, fk, cls, fn) {
+    var item = el("div", "kai-item" + (cls ? " " + cls : ""), { tabIndex: 0, textContent: label });
+    item.dataset.fk = fk;
+    item._activate = fn;
+    item.addEventListener("click", function (e) {
+      e.preventDefault();
+      fn(item);
+    });
+    return item;
+  }
+
   function updateSoftkeys() {
-    var compact = ScreenSetup.isCompact ? ScreenSetup.isCompact() : (Math.min(innerWidth, innerHeight) <= 360);
-    skBar.hidden = !compact;
-    if (skBar.hidden) return;
     if (page === "props") {
       skLeft.textContent = tr("Назад", "Back");
       skCenter.textContent = tr("ВЫБРАТЬ", "SELECT");
@@ -173,23 +166,14 @@
     }
   }
 
-  function head(title, sub, withBack) {
+  function head(title, sub) {
     var r = ScreenSetup.result();
     var h = el("div", "pb-head");
-    if (withBack) {
-      var b = el("button", "pb-close", { type: "button", title: tr("Назад", "Back"), textContent: "‹" });
-      b.dataset.fk = "head:back";
-      b.addEventListener("click", back);
-      h.appendChild(b);
-    }
     var t = el("div", "pb-title");
     append(t,
-      txt("b", "", title || r && r.name || config.jars.replace(/^.*[\/:]/, "").replace(/\.jar$/i, "")),
-      txt("span", "", sub || tr("Настройки сохраняются для этой игры", "Settings are saved for this game")));
-    var x = el("button", "pb-close", { type: "button", title: tr("Закрыть", "Close"), textContent: "✕" });
-    x.dataset.fk = "head:close";
-    x.addEventListener("click", function () { toggle(false); });
-    append(h, t, x);
+      txt("b", "", title || (r && r.name) || config.jars.replace(/^.*[\/:]/, "").replace(/\.jar$/i, "")),
+      txt("span", "", sub || tr("Настройки игры · Вызов/RSK — закрыть", "Game settings · Call/RSK — close")));
+    h.appendChild(t);
     return h;
   }
 
@@ -218,16 +202,7 @@
     var row = el("label", "prop");
     var name = el("span", "opt-name");
     name.appendChild(txt("span", "prop-key", key));
-    if (key in own) {
-      var reset = el("button", "own", { type: "button", textContent: tr("своё ✕", "custom ✕"), title: tr("Вернуть значение по умолчанию", "Restore default") });
-      reset.dataset.fk = "prop-reset:" + key;
-      reset.addEventListener("click", function (e) {
-        e.preventDefault();
-        Settings.setProp(id, key, null);
-        render();
-      });
-      name.appendChild(reset);
-    }
+    if (key in own) name.appendChild(txt("span", "own-tag", tr("своё", "custom")));
     var def = propDefault(key);
     var input = el("input", "", { value: key in own ? own[key] : "", placeholder: def || tr("не задано", "not set"), spellcheck: false, autocomplete: "off", autocapitalize: "none" });
     input.dataset.fk = "prop:" + key;
@@ -246,204 +221,146 @@
     var sec = el("section");
     if (propsChanged()) {
       var bar = el("div", "restart");
-      var rb = txt("button", "", tr("Перезапустить", "Restart"));
-      rb.type = "button";
-      rb.dataset.fk = "props:restart";
-      rb.addEventListener("click", function () { location.reload(); });
-      append(bar, txt("span", "", tr("Свойства применятся после перезапуска игры.", "Properties apply after the game restarts.")), rb);
+      bar.appendChild(txt("span", "", tr("Свойства применятся после перезапуска игры.", "Properties apply after the game restarts.")));
+      bar.appendChild(kaiItem(tr("Перезапустить игру", "Restart game"), "props:restart", "kai-btn", function () { location.reload(); }));
       sec.appendChild(bar);
     }
     var list = el("div", "props");
     keys.forEach(function (k) { list.appendChild(propRow(k, own)); });
     sec.appendChild(list);
+
     var add = el("form", "prop-add");
     var k = el("input", "", { placeholder: tr("Свойство", "Property"), spellcheck: false, autocomplete: "off", autocapitalize: "none" });
     k.dataset.fk = "prop-add:k";
     var v = el("input", "", { placeholder: tr("Значение", "Value"), spellcheck: false, autocomplete: "off", autocapitalize: "none" });
     v.dataset.fk = "prop-add:v";
-    var ok = el("button", "", { type: "submit", textContent: tr("Добавить", "Add") });
-    ok.dataset.fk = "prop-add:ok";
-    add.addEventListener("submit", function (e) {
-      e.preventDefault();
+    var submitAdd = function () {
       var key = k.value.trim();
       if (!key) { setFocusEl(k); return; }
       Settings.setProp(id, key, v.value);
       render();
-    });
-    append(add, k, v, ok);
+    };
+    add.addEventListener("submit", function (e) { e.preventDefault(); submitAdd(); });
+    append(add, k, v, kaiItem(tr("Добавить свойство", "Add property"), "prop-add:ok", "kai-btn", submitAdd));
     append(sec, txt("h3", "", tr("Своё свойство", "Custom property")), add);
-    append(box, head(tr("Системные свойства", "System properties"), tr("System.getProperty для этой игры", "System.getProperty for this game"), true), sec);
+    append(box, head(tr("Системные свойства", "System properties"), tr("LSK/Esc — назад · RSK — закрыть", "LSK/Esc — back · RSK — close")), sec);
+
     if (Object.keys(own).length) {
       var f = el("div", "pb-foot");
-      var reset = txt("button", "ghost", tr("Сбросить все свойства", "Reset all properties"));
-      reset.type = "button";
-      reset.dataset.fk = "props:reset";
-      reset.addEventListener("click", function () {
-        if (!reset.classList.contains("confirm")) {
-          reset.classList.add("confirm");
-          reset.textContent = tr("Точно сбросить?", "Reset?");
+      f.appendChild(kaiItem(tr("Сбросить все свойства", "Reset all properties"), "props:reset", "kai-btn ghost", function (item) {
+        if (!item.classList.contains("confirm")) {
+          item.classList.add("confirm");
+          item.textContent = tr("Точно сбросить? (OK)", "Confirm reset? (OK)");
           return;
         }
         Settings.resetProps(id);
         render();
-      });
-      f.appendChild(reset);
+      }));
       box.appendChild(f);
     }
   }
 
-  function segment() {
-    var seg = el("div", "seg");
-    [["auto", tr("Авто", "Auto")], ["manual", tr("Свой размер", "Custom")], ["fit", tr("По окну", "Fit window")]].forEach(function (o) {
-      var b = txt("button", config.screenMode === o[0] ? "on" : "", o[1]);
-      b.type = "button";
-      b.dataset.fk = "scr-mode:" + o[0];
-      b.addEventListener("click", function () {
-        if (o[0] === "manual") setScreen("manual", config.screenMode === "manual" ? config.screen : ScreenSetup.current() || canvasSize());
-        else setScreen(o[0]);
-      });
-      seg.appendChild(b);
-    });
-    if (config.urlLocked.screen) seg.classList.add("locked");
-    return seg;
-  }
-
-  function now() {
+  function screenSection() {
+    var sec = el("section");
     var r = ScreenSetup.result();
-    var size = config.screenMode === "fit" ? canvasSize() : ScreenSetup.current();
-    var wrap = el("div", "scr-now");
-    var big = txt("div", "scr-size", pretty(size));
-    var src = "";
-    if (config.urlLocked.screen) src = tr("Задано в адресе страницы", "Set in page URL");
-    else if (config.screenMode === "manual") src = tr("Выбрано вручную", "Chosen manually");
-    else if (config.screenMode === "fit") src = tr("Подстраивается под окно браузера", "Fits the browser window");
-    else if (!r) src = tr("Определяется…", "Detecting…");
-    else src = tr("Подобран автоматически", "Detected automatically");
-    append(wrap, big, txt("div", "scr-src", src));
-    return wrap;
-  }
+    var curSize = config.screenMode === "fit" ? canvasSize() : ScreenSetup.current();
+    var src = config.urlLocked.screen ? tr("Задано в URL", "Set in URL")
+      : config.screenMode === "manual" ? tr("Выбрано вручную", "Manual")
+      : config.screenMode === "fit" ? tr("По окну", "Fit window")
+      : !r ? tr("Определяется…", "Detecting…")
+      : tr("Авто", "Auto");
 
-  function candidates() {
-    var r = ScreenSetup.result();
-    var cbox = el("div", "cands");
-    if (!r) return cbox;
-    var list = r.candidates.slice();
-    if (r.observed && !list.some(function (c) { return c.size === r.observed; })) {
-      list.push({ size: r.observed });
-    }
-    var others = list.filter(function (c) { return c.size !== ScreenSetup.current(); });
-    if (others.length) {
-      cbox.appendChild(txt("div", "sub", tr("Если картинка не та, попробуйте", "If the picture looks wrong, try")));
-      var chips = el("div", "chips");
-      others.forEach(function (c) {
-        var b = txt("button", "chip", pretty(c.size));
-        b.type = "button";
-        b.dataset.fk = "cand:" + c.size;
-        b.addEventListener("click", function () { setScreen("manual", c.size); });
-        chips.appendChild(b);
-      });
-      cbox.appendChild(chips);
-    }
-    if (r.touch && config.keypad && !config.urlLocked.keypad) {
-      var tip = el("div", "tip");
-      var hide = txt("button", "ghost", tr("Скрыть", "Hide"));
-      hide.type = "button";
-      hide.dataset.fk = "tip:hide-keypad";
-      hide.addEventListener("click", function () {
-        save("keypad", "0");
-        apply.keypad("0");
-        render();
-      });
-      append(tip, txt("span", "muted", tr("Игра сенсорная — экранная клавиатура ей не нужна.", "Touch game — the on-screen keypad is not needed.")), hide);
-      cbox.appendChild(tip);
-    }
-    return cbox;
-  }
+    var now = el("div", "scr-now");
+    append(now, txt("div", "scr-size", pretty(curSize)), txt("div", "scr-src", src));
 
-  function manual() {
-    var wrap = el("div", "manual");
-    var has240 = false, has320 = false;
-    Settings.presets.forEach(function (g) {
-      wrap.appendChild(txt("div", "sub", g.title));
-      var chips = el("div", "chips");
-      g.items.forEach(function (s) {
-        if (s === "240x320") has240 = true;
-        if (s === "320x240") has320 = true;
-        var b = txt("button", "chip" + (config.screen === s ? " on" : ""), pretty(s));
-        b.type = "button";
-        b.dataset.fk = "preset:" + s;
-        b.addEventListener("click", function () { setScreen("manual", s); });
-        chips.appendChild(b);
+    var row = el("label", "opt");
+    row.appendChild(txt("span", "opt-name", tr("Разрешение игры", "Game resolution")));
+    var sel = el("select");
+    sel.dataset.fk = "scr:select";
+
+    var items = [
+      ["auto", tr("Автоопределение", "Auto detect")],
+      ["fit", tr("По экрану устройства", "Fit device window")],
+      ["128x128", "128 × 128"],
+      ["128x160", "128 × 160"],
+      ["176x208", "176 × 208"],
+      ["176x220", "176 × 220"],
+      ["208x208", "208 × 208"],
+      ["240x320", "240 × 320"],
+      ["320x240", "320 × 240"],
+      ["352x416", "352 × 416"],
+      ["360x640", "360 × 640"],
+      ["400x240", "400 × 240"]
+    ];
+    if (r && r.candidates) {
+      r.candidates.forEach(function (c) {
+        if (!items.some(function (it) { return it[0] === c.size; })) {
+          items.push([c.size, pretty(c.size)]);
+        }
       });
-      wrap.appendChild(chips);
+    }
+    if (r && r.observed && !items.some(function (it) { return it[0] === r.observed; })) {
+      items.push([r.observed, pretty(r.observed)]);
+    }
+
+    var currentKey = config.screenMode === "manual" ? config.screen : config.screenMode;
+    if (config.screenMode === "manual" && !items.some(function (it) { return it[0] === currentKey; })) {
+      items.push([currentKey, pretty(currentKey)]);
+    }
+
+    items.forEach(function (it) {
+      sel.appendChild(el("option", "", { value: it[0], textContent: it[1] }));
     });
-    if (!has240 || !has320) {
-      var extra = el("div", "chips");
-      [["240x320", !has240], ["320x240", !has320]].forEach(function (pair) {
-        if (!pair[1]) return;
-        var s = pair[0];
-        var b = txt("button", "chip" + (config.screen === s ? " on" : ""), pretty(s));
-        b.type = "button";
-        b.dataset.fk = "preset:" + s;
-        b.addEventListener("click", function () { setScreen("manual", s); });
-        extra.appendChild(b);
-      });
-      wrap.appendChild(extra);
+    sel.value = currentKey;
+    sel.disabled = !!config.urlLocked.screen;
+    sel.addEventListener("change", function () {
+      var v = sel.value;
+      if (v === "auto" || v === "fit") setScreen(v);
+      else setScreen("manual", v);
+    });
+    row.appendChild(sel);
+
+    append(sec, txt("h3", "", tr("Экран (Keyscreen)", "Screen (Keyscreen)")), now, row);
+
+    if (!config.urlLocked.screen) {
+      var cur = Settings.parse(config.screen) || [240, 320];
+      var cForm = el("form", "custom");
+      var w = el("input", "", { type: "tel", value: String(cur[0]), inputMode: "numeric", pattern: "[0-9]*", maxLength: 4 });
+      w.dataset.fk = "custom:w";
+      var h = el("input", "", { type: "tel", value: String(cur[1]), inputMode: "numeric", pattern: "[0-9]*", maxLength: 4 });
+      h.dataset.fk = "custom:h";
+      var applyCustom = function () {
+        var a = Math.max(64, Math.min(2048, parseInt(w.value, 10) || 240));
+        var b = Math.max(64, Math.min(2048, parseInt(h.value, 10) || 320));
+        setScreen("manual", a + "x" + b);
+      };
+      cForm.addEventListener("submit", function (e) { e.preventDefault(); applyCustom(); });
+      append(cForm,
+        w, txt("span", "", "×"), h,
+        kaiItem("⇄", "custom:swap", "ghost", function () { setScreen("manual", cur[1] + "x" + cur[0]); }),
+        kaiItem(tr("Задать", "Set"), "custom:ok", "kai-btn", applyCustom));
+      sec.appendChild(cForm);
     }
 
-    var cur = Settings.parse(config.screen) || [240, 320];
-    var row = el("form", "custom");
-    var w = el("input", "", { type: "tel", value: String(cur[0]), inputMode: "numeric", pattern: "[0-9]*", maxLength: 4, title: tr("Ширина", "Width") });
-    w.dataset.fk = "custom:w";
-    var h = el("input", "", { type: "tel", value: String(cur[1]), inputMode: "numeric", pattern: "[0-9]*", maxLength: 4, title: tr("Высота", "Height") });
-    h.dataset.fk = "custom:h";
-    var swap = el("button", "ghost", { type: "button", textContent: "⇄", title: tr("Поменять местами", "Swap") });
-    swap.dataset.fk = "custom:swap";
-    var ok = el("button", "", { type: "submit", textContent: tr("Применить", "Apply") });
-    ok.dataset.fk = "custom:ok";
-    swap.addEventListener("click", function () {
-      setScreen("manual", cur[1] + "x" + cur[0]);
-    });
-    row.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var a = Math.max(64, Math.min(2048, parseInt(w.value, 10) || 240));
-      var b = Math.max(64, Math.min(2048, parseInt(h.value, 10) || 320));
-      setScreen("manual", a + "x" + b);
-    });
-    append(row, txt("span", "sub", tr("Свой", "Custom")), w, txt("span", "", "×"), h, swap, ok);
-    wrap.appendChild(row);
-    return wrap;
-  }
+    if (startSize && startSize !== canvasSize()) {
+      var bar = el("div", "restart");
+      bar.appendChild(txt("span", "", tr("Запущено в " + pretty(startSize) + ". Перезапустите для нового размера.", "Started at " + pretty(startSize) + ". Restart to apply.")));
+      bar.appendChild(kaiItem(tr("Перезапустить игру", "Restart game"), "scr:restart", "kai-btn", function () { location.reload(); }));
+      sec.appendChild(bar);
+    }
 
-  function restart() {
-    if (!startSize || startSize === canvasSize()) return null;
-    var bar = el("div", "restart");
-    var b = txt("button", "", tr("Перезапустить", "Restart"));
-    b.type = "button";
-    b.dataset.fk = "scr:restart";
-    b.addEventListener("click", function () { location.reload(); });
-    append(bar, txt("span", "", tr("Игра запущена в " + pretty(startSize) + ". Новый размер точно заработает после перезапуска.", "The game started at " + pretty(startSize) + ". The new size will apply after a restart.")), b);
-    return bar;
+    return sec;
   }
 
   function selects() {
     var wrap = el("div", "opts");
-    ["scale", "rotate", "keypad", "fps", "jit", "platform"].forEach(function (key) {
+    ["scale", "rotate", "fps", "jit", "platform"].forEach(function (key) {
       var opt = Settings.options[key];
       var row = el("label", "opt");
       var name = el("span", "opt-name");
       name.appendChild(txt("span", "", opt.label));
-      if (state.own[key]) {
-        var reset = el("button", "own", { type: "button", textContent: tr("своё ✕", "custom ✕"), title: tr("Вернуть значение по умолчанию", "Restore default") });
-        reset.dataset.fk = "opt-reset:" + key;
-        reset.addEventListener("click", function (e) {
-          e.preventDefault();
-          save(key, null);
-          apply[key](state.values[key]);
-          render();
-        });
-        name.appendChild(reset);
-      }
+      if (state.own[key]) name.appendChild(txt("span", "own-tag", tr("своё", "custom")));
+
       var sel = el("select");
       sel.dataset.fk = "opt:" + key;
       opt.items.forEach(function (it) {
@@ -451,8 +368,6 @@
       });
       if (config.urlLocked[key]) {
         sel.value = key === "jit" ? (config.jit ? "1" : "0") : key === "platform" ? (queryParam("platform") || "") : String(config[key]);
-      } else if (key === "keypad" && !state.own.keypad) {
-        sel.value = String(config.keypad);
       } else {
         sel.value = state.values[key];
       }
@@ -469,8 +384,8 @@
   }
 
   function linkText(st) {
-    var link = !st.peers ? tr("нет связи с сервером", "no server connection") : st.via === "P2P" ? tr("напрямую (P2P)", "direct (P2P)") : st.via === "TURN" ? tr("через TURN", "via TURN") : tr("через сервер", "via server");
-    return tr("Игроков: ", "Players: ") + st.peers + " · " + link + (st.via && st.rtt ? " · " + st.rtt + tr(" мс", " ms") : "");
+    var link = !st.peers ? tr("нет связи", "no connection") : st.via === "P2P" ? "P2P" : st.via === "TURN" ? "TURN" : tr("сервер", "server");
+    return tr("Игроков: ", "Players: ") + st.peers + " · " + link + (st.via && st.rtt ? " · " + st.rtt + " ms" : "");
   }
 
   function roomKey(st) {
@@ -495,35 +410,24 @@
     }
     btStatus = txt("span", "muted", linkText(st));
     info.appendChild(btStatus);
-    var row = el("div", "bt-actions");
-    var change = txt("button", "ghost", tr("Сменить комнату", "Change room"));
-    change.type = "button";
-    change.dataset.fk = "bt:change";
-    change.addEventListener("click", function () {
+    var actions = el("div", "bt-actions");
+    actions.appendChild(kaiItem(tr("Сменить комнату", "Change room"), "bt:change", "kai-btn ghost", function () {
       toggle(false);
       BtRoom.change();
-    });
-    row.appendChild(change);
+    }));
     if (st.room.mode !== "near") {
-      var cp = txt("button", "ghost", tr("Скопировать", "Copy"));
-      cp.type = "button";
-      cp.dataset.fk = "bt:copy";
-      cp.addEventListener("click", function () { BtRoom.copy(cp); });
-      row.appendChild(cp);
+      actions.appendChild(kaiItem(tr("Скопировать", "Copy"), "bt:copy", "kai-btn ghost", function (item) { BtRoom.copy(item); }));
     }
-    append(sec, txt("h3", "", tr("Сетевая игра", "Multiplayer")), info, row);
+    append(sec, txt("h3", "", tr("Сетевая игра", "Multiplayer")), info, actions);
     return sec;
   }
 
   function footer() {
     var f = el("div", "pb-foot");
-    var reset = txt("button", "ghost", tr("Сбросить для этой игры", "Reset for this game"));
-    reset.type = "button";
-    reset.dataset.fk = "foot:reset";
-    reset.addEventListener("click", function () {
-      if (!reset.classList.contains("confirm")) {
-        reset.classList.add("confirm");
-        reset.textContent = tr("Точно сбросить?", "Reset?");
+    f.appendChild(kaiItem(tr("Сбросить настройки игры", "Reset game settings"), "foot:reset", "kai-btn ghost", function (item) {
+      if (!item.classList.contains("confirm")) {
+        item.classList.add("confirm");
+        item.textContent = tr("Точно сбросить? (OK)", "Confirm reset? (OK)");
         return;
       }
       var hadJit = state.own.jit || state.own.platform || Object.keys(Settings.props(id)).length;
@@ -535,14 +439,10 @@
       state = Settings.resolve(id);
       config.screenMode = state.values.screen === "fit" ? "fit" : Settings.parse(state.values.screen) ? "manual" : "auto";
       if (config.screenMode === "manual") config.screen = state.values.screen;
-      ["scale", "rotate", "keypad", "fps"].forEach(function (k) { apply[k](state.values[k]); });
-      if (ScreenSetup.isCompact && ScreenSetup.isCompact() && !config.urlLocked.keypad) {
-        apply.keypad("0");
-      }
+      ["scale", "rotate", "fps"].forEach(function (k) { apply[k](state.values[k]); });
       ScreenSetup.apply();
       render();
-    });
-    f.appendChild(reset);
+    }));
     return f;
   }
 
@@ -559,40 +459,30 @@
     }
 
     var nav = el("section");
-    var home = txt("button", "fm-open ghost", tr("← К списку игр", "← All games"));
-    home.type = "button";
-    home.dataset.fk = "nav:home";
-    home.addEventListener("click", function () { location.href = "index.html"; });
-    nav.appendChild(home);
+    nav.appendChild(kaiItem(tr("← Выйти к списку игр", "← Exit to games list"), "nav:home", "kai-btn ghost", function () {
+      if (typeof myflushAll === "function") myflushAll();
+      location.href = "index.html";
+    }));
 
-    var scr = el("section");
-    append(scr, txt("h3", "", tr("Экран", "Screen")), now(), segment());
-    var rs = restart();
-    if (rs) scr.appendChild(rs);
-    if (config.screenMode === "auto") scr.appendChild(candidates());
-    if (config.screenMode === "manual") scr.appendChild(manual());
     var view = el("section");
-    append(view, txt("h3", "", tr("Изображение и управление", "Display and controls")), selects());
+    append(view, txt("h3", "", tr("Масштаб и система", "Scaling and system")), selects());
+
     var files = el("section");
-    var fm = txt("button", "fm-open", tr("Открыть файлы телефона", "Open phone files"));
-    fm.type = "button";
-    fm.dataset.fk = "files:open";
-    fm.addEventListener("click", function () {
-      toggle(false);
-      Files.open();
-    });
-    append(files, txt("h3", "", tr("Файлы", "Files")), fm);
     var n = Object.keys(Settings.props(id)).length;
-    var pb = txt("button", "fm-open ghost", tr("Системные свойства", "System properties") + (n ? " · " + n : ""));
-    pb.type = "button";
-    pb.dataset.fk = "props:open";
-    pb.addEventListener("click", function () { go("props"); });
-    files.appendChild(pb);
+    append(files,
+      txt("h3", "", tr("Файлы и свойства", "Files and properties")),
+      kaiItem(tr("Файлы телефона", "Phone files"), "files:open", "kai-btn", function () {
+        toggle(false);
+        Files.open();
+      }),
+      kaiItem(tr("Системные свойства", "System properties") + (n ? " (" + n + ")" : ""), "props:open", "kai-btn ghost", function () {
+        go("props");
+      }));
 
     box.appendChild(head());
     var bt = bluetooth();
     if (bt) box.appendChild(bt);
-    append(box, nav, scr, view, files, footer());
+    append(box, nav, screenSection(), view, files, footer());
     box.scrollTop = scroll;
     updateSoftkeys();
     restoreFocus();
@@ -605,16 +495,8 @@
       focusTargetKey = null;
     }
     panel.hidden = !open;
-    gear.classList.toggle("on", open);
     if (open) render();
     else if (panel.contains(document.activeElement)) document.activeElement.blur();
-  }
-
-  function place() {
-    var c = document.getElementById("display").getBoundingClientRect();
-    var s = 46, top = c.top >= s, right = innerWidth - c.right >= s, left = c.left >= s;
-    gear.classList.toggle("left", !top && !right && left);
-    gear.classList.toggle("over", !top && !right && !left);
   }
 
   function moveFocus(dir) {
@@ -631,20 +513,17 @@
       setFocusEl(list[0]);
       return;
     }
-
     if (dir === "left" || dir === "right") {
       idx = (idx + (dir === "right" ? 1 : -1) + list.length) % list.length;
       setFocusEl(list[idx]);
       return;
     }
-
     var rects = list.map(function (el) {
       var r = el.getBoundingClientRect();
       return { el: el, cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2 };
     });
     var c = rects[idx];
-    var bestIdx = -1;
-    var bestScore = Infinity;
+    var bestIdx = -1, bestScore = Infinity;
     for (var j = 0; j < rects.length; j++) {
       if (j === idx) continue;
       var dy = dir === "down" ? (rects[j].cy - c.cy) : (c.cy - rects[j].cy);
@@ -655,43 +534,23 @@
         bestIdx = j;
       }
     }
-    if (bestIdx < 0) {
-      bestIdx = dir === "down" ? 0 : list.length - 1;
-    }
+    if (bestIdx < 0) bestIdx = dir === "down" ? 0 : list.length - 1;
     setFocusEl(list[bestIdx]);
   }
 
-  function activateFocused() {
-    var target = document.activeElement;
-    if (!panel.contains(target) || target === box) {
-      var list = focusables();
-      for (var i = 0; i < list.length; i++) {
-        if (list[i].classList.contains("kbd-focus")) { target = list[i]; break; }
-      }
-    }
-    if (!target || target === box) return;
-    if (target.tagName === "INPUT") {
-      if (target.form && target.form.requestSubmit) target.form.requestSubmit();
-      else if (target.form) {
-        var sub = target.form.querySelector('button[type="submit"]');
-        if (sub) sub.click();
-      }
-      return;
-    }
-    target.click();
+  function stopEvent(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
   }
 
-  function softLeftAction() {
-    if (page === "props") back();
-    else {
-      toggle(false);
-      Files.open();
-    }
+  function higherModalOpen() {
+    var mc = document.getElementById("midlet-chooser");
+    if (mc && mc.style.display !== "none") return true;
+    if (window.BtRoom && BtRoom.isOpen && BtRoom.isOpen()) return true;
+    if (window.Files && Files.isOpen && Files.isOpen()) return true;
+    return false;
   }
-
-  skLeft.addEventListener("click", softLeftAction);
-  skCenter.addEventListener("click", activateFocused);
-  skRight.addEventListener("click", back);
 
   box.addEventListener("focusin", function (e) {
     if (e.target && e.target !== box && e.target.dataset && e.target.dataset.fk) {
@@ -703,115 +562,104 @@
   });
 
   BtRoom.watch(function (st) {
-    gear.dataset.bt = !st.room ? "" : !st.peers ? "off" : st.via ? "direct" : "server";
     if (panel.hidden) return;
     if (btStatus && roomKey(st) === btKey) btStatus.textContent = linkText(st);
     else render();
   });
-  ScreenSetup.onChange(function () {
-    place();
-    render();
-  });
-  window.addEventListener("resize", function () {
-    place();
-    if (!panel.hidden) updateSoftkeys();
-  });
+  ScreenSetup.onChange(render);
+
   var origStarted = ScreenSetup.started;
   ScreenSetup.started = function () {
     startSize = canvasSize();
     origStarted();
-    place();
-    if (ScreenSetup.isCompact && ScreenSetup.isCompact()) {
-      showToast(tr("Вызов / LSK+RSK — меню", "Call / LSK+RSK — menu"), 2800);
-    }
+    showToast(tr("Вызов / LSK+RSK — настройки", "Call / LSK+RSK — settings"), 2800);
   };
 
-  gear.addEventListener("click", function () { toggle(panel.hidden); });
-  var backdrop = false;
-  panel.addEventListener(PTR_DOWN, function (e) {
-    backdrop = e.target === panel;
-  });
-  panel.addEventListener("click", function (e) {
-    if (e.target === panel && backdrop) toggle(false);
-  });
-  panel.addEventListener("keydown", function (e) {
+  window.addEventListener("keydown", function (e) {
+    if (panel.hidden || higherModalOpen()) return;
     if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
-    e.stopPropagation();
 
-    if (e.key === "Call" || e.key === "F10" || e.key === "ContextMenu") {
-      e.preventDefault();
+    if (e.key === "Call" || e.key === "F10" || e.key === "ContextMenu" || e.key === "Tab") {
+      stopEvent(e);
+      if (!e.repeat) toggle(false);
+      return;
+    }
+    if (e.key === "SoftLeft" || e.key === "Escape") {
+      stopEvent(e);
+      if (page === "props") back();
+      else {
+        toggle(false);
+        Files.open();
+      }
+      return;
+    }
+    if (e.key === "SoftRight") {
+      stopEvent(e);
       toggle(false);
-      return;
-    }
-    if (e.key === "SoftLeft") {
-      e.preventDefault();
-      softLeftAction();
-      return;
-    }
-    if (e.key === "SoftRight" || e.key === "Escape") {
-      e.preventDefault();
-      back();
       return;
     }
 
     var active = document.activeElement;
     if (e.key === "Backspace") {
       if (active && active.tagName === "INPUT" && (active.value || "").length > 0) return;
-      e.preventDefault();
+      stopEvent(e);
       back();
       return;
     }
+    if (e.key === "Enter") {
+      if (active && active.tagName === "SELECT") return;
+      if (active && active._activate) {
+        stopEvent(e);
+        active._activate(active);
+      }
+      return;
+    }
     if (e.key === "ArrowUp") {
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("up");
       return;
     }
     if (e.key === "ArrowDown") {
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("down");
       return;
     }
     if (e.key === "ArrowLeft") {
-      if (active && active.tagName === "INPUT") {
-        if (typeof active.selectionStart === "number" && active.selectionStart > 0) return;
-      }
-      if (active && active.tagName === "SELECT") {
-        e.preventDefault();
-        if (active.selectedIndex > 0) {
-          active.selectedIndex--;
-          save(active.dataset.fk.replace("opt:", ""), active.value);
-          apply[active.dataset.fk.replace("opt:", "")](active.value);
-          render();
-        }
+      if (active && active.tagName === "INPUT" && typeof active.selectionStart === "number" && active.selectionStart > 0) return;
+      if (active && active.tagName === "SELECT" && active.selectedIndex > 0) {
+        stopEvent(e);
+        active.selectedIndex--;
+        var ev1 = document.createEvent("Event");
+        ev1.initEvent("change", true, true);
+        active.dispatchEvent(ev1);
         return;
       }
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("left");
       return;
     }
     if (e.key === "ArrowRight") {
-      if (active && active.tagName === "INPUT") {
-        if (typeof active.selectionStart === "number" && active.selectionStart < (active.value || "").length) return;
-      }
-      if (active && active.tagName === "SELECT") {
-        e.preventDefault();
-        if (active.selectedIndex < active.options.length - 1) {
-          active.selectedIndex++;
-          save(active.dataset.fk.replace("opt:", ""), active.value);
-          apply[active.dataset.fk.replace("opt:", "")](active.value);
-          render();
-        }
+      if (active && active.tagName === "INPUT" && typeof active.selectionStart === "number" && active.selectionStart < (active.value || "").length) return;
+      if (active && active.tagName === "SELECT" && active.selectedIndex < active.options.length - 1) {
+        stopEvent(e);
+        active.selectedIndex++;
+        var ev2 = document.createEvent("Event");
+        ev2.initEvent("change", true, true);
+        active.dispatchEvent(ev2);
         return;
       }
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("right");
-      return;
     }
-  });
-  panel.addEventListener("keyup", function (e) {
+  }, true);
+
+  window.addEventListener("keyup", function (e) {
+    if (panel.hidden || higherModalOpen()) return;
     if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
-    e.stopPropagation();
-  });
+    if (e.key === "SoftLeft" || e.key === "Escape" || e.key === "SoftRight" || e.key === "Call") {
+      e.stopPropagation();
+    }
+  }, true);
 
   window.Panel = {
     toggle: toggle,

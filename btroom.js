@@ -1,5 +1,4 @@
 var BtRoom = (function () {
-  var PTR_DOWN = "PointerEvent" in window ? "pointerdown" : "mousedown";
   var WORDS = ["volk", "lisa", "sokol", "kedr", "rys", "bars", "los", "orel", "yozh", "sova"];
   var MODES = [["create", tr("Создать", "Create")], ["join", tr("Подключиться", "Join")], ["near", tr("Рядом", "Nearby")]];
   var NETS = [["auto", tr("Авто", "Auto")], ["p2p", "P2P"], ["turn", "TURN"]];
@@ -7,10 +6,10 @@ var BtRoom = (function () {
 
   var overlay = el("div", "", { id: "btroom", hidden: true });
   var box = el("form", "panel-box bt-box", { noValidate: true, tabIndex: -1 });
-  var skBar = el("div", "kaios-softkeys", { id: "bt-softkeys" });
-  var skLeft = el("button", "kaios-sk-btn kaios-sk-left", { type: "button" });
-  var skCenter = el("button", "kaios-sk-btn kaios-sk-center", { type: "button" });
-  var skRight = el("button", "kaios-sk-btn kaios-sk-right", { type: "button" });
+  var skBar = el("div", "kai-softkeys", { id: "bt-softkeys" });
+  var skLeft = el("span", "sk-l");
+  var skCenter = el("span", "sk-c");
+  var skRight = el("span", "sk-r");
 
   var current = { room: null, peers: 0, via: "" }, watchers = [];
   var handler = null, done = null, mode = "create", busy = false, openedAt = 0;
@@ -123,13 +122,12 @@ var BtRoom = (function () {
     if (!target || !box) return;
     var bRect = box.getBoundingClientRect();
     var tRect = target.getBoundingClientRect();
-    var bottomPad = skBar.hidden ? 8 : 34;
     if (tRect.top < bRect.top + 4) box.scrollTop -= (bRect.top + 4 - tRect.top);
-    else if (tRect.bottom > bRect.bottom - bottomPad) box.scrollTop += (tRect.bottom - (bRect.bottom - bottomPad));
+    else if (tRect.bottom > bRect.bottom - 32) box.scrollTop += (tRect.bottom - (bRect.bottom - 32));
   }
 
   function focusables() {
-    var list = Array.prototype.slice.call(box.querySelectorAll("button:not(:disabled), input:not(:disabled)"));
+    var list = Array.prototype.slice.call(box.querySelectorAll(".kai-item:not(.disabled), select:not(:disabled), input:not(:disabled)"));
     return list.filter(function (node) { return node.offsetParent !== null; });
   }
 
@@ -157,24 +155,44 @@ var BtRoom = (function () {
         }
       }
     }
-    if (!match) {
-      for (var j = 0; j < list.length; j++) {
-        if (!list[j].classList.contains("pb-close")) {
-          match = list[j];
-          break;
-        }
-      }
-    }
     setFocusEl(match || list[0]);
   }
 
   function updateSoftkeys() {
-    var compact = (typeof ScreenSetup !== "undefined" && ScreenSetup.isCompact) ? ScreenSetup.isCompact() : (Math.min(innerWidth, innerHeight) <= 360);
-    skBar.hidden = !compact;
-    if (skBar.hidden) return;
-    skLeft.textContent = mode === "create" ? tr("Копир.", "Copy") : "";
+    skLeft.textContent = mode === "create" ? tr("Копир.", "Copy") : tr("Закрыть", "Close");
     skCenter.textContent = tr("ВЫБРАТЬ", "SELECT");
     skRight.textContent = tr("Закрыть", "Close");
+  }
+
+  function kaiItem(label, fk, cls, fn) {
+    var item = el("div", "kai-item" + (cls ? " " + cls : ""), { tabIndex: 0, textContent: label });
+    item.dataset.fk = fk;
+    item._activate = fn;
+    item.addEventListener("click", function (e) {
+      e.preventDefault();
+      fn(item);
+    });
+    return item;
+  }
+
+  function submitForm() {
+    if (busy || !done) return;
+    var f = form[mode];
+    form.name = form.name.trim();
+    if (mode !== "near") {
+      f.room = f.room.trim();
+      if (!f.room) return render(tr("Введите название комнаты", "Enter a room name"));
+    }
+    busy = true;
+    render();
+    done.attempt({ mode: mode, room: mode === "near" ? "" : f.room, pass: mode === "near" ? "" : f.pass, net: mode === "create" ? f.net : "auto", name: form.name }).then(function () {
+      remember(form.name);
+      busy = false;
+      close(true);
+    }, function (msg) {
+      busy = false;
+      render(msg);
+    });
   }
 
   function render(error) {
@@ -183,30 +201,29 @@ var BtRoom = (function () {
     var head = el("div", "pb-head");
     var title = el("div", "pb-title");
     title.appendChild(txt("b", "", tr("Сетевая игра", "Multiplayer")));
-    var x = el("button", "pb-close", { type: "button", title: tr("Закрыть", "Close"), textContent: "✕" });
-    x.dataset.fk = "bt:close";
-    x.addEventListener("click", function () { close(false); });
-    append(head, title, x);
+    head.appendChild(title);
 
     var who = el("section");
     who.appendChild(field(tr("Ваше имя в игре", "Your name in game"), form.name, { maxLength: 16, autocomplete: "nickname", spellcheck: false }, "bt:name", function (v) { form.name = v; }));
 
-    var seg = el("div", "seg");
+    var modeRow = el("label", "opt");
+    modeRow.appendChild(txt("span", "opt-name", tr("Режим", "Mode")));
+    var modeSel = el("select");
+    modeSel.dataset.fk = "bt:mode";
     MODES.forEach(function (m) {
-      var b = txt("button", mode === m[0] ? "on" : "", m[1]);
-      b.type = "button";
-      b.dataset.fk = "bt-mode:" + m[0];
-      b.addEventListener("click", function () {
-        mode = m[0];
-        render();
-      });
-      seg.appendChild(b);
+      modeSel.appendChild(el("option", "", { value: m[0], textContent: m[1] }));
     });
+    modeSel.value = mode;
+    modeSel.addEventListener("change", function () {
+      mode = modeSel.value;
+      render();
+    });
+    modeRow.appendChild(modeSel);
 
     var body = el("section");
-    body.appendChild(seg);
+    body.appendChild(modeRow);
     if (mode === "near") {
-      body.appendChild(txt("div", "sub", tr("Игроки из одной сети (один Wi‑Fi или один внешний IP) видят друг друга без комнаты и пароля.", "Players on the same network (same Wi‑Fi or public IP) see each other without a room or password.")));
+      body.appendChild(txt("div", "sub", tr("Игроки из одной сети видят друг друга без комнаты и пароля.", "Players on the same network see each other without a room or password.")));
     } else {
       var f = form[mode];
       append(body,
@@ -214,35 +231,32 @@ var BtRoom = (function () {
         field(tr("Пароль", "Password"), f.pass, { maxLength: 64, autocomplete: "off", spellcheck: false, autocapitalize: "none" }, "bt:pass", function (v) { f.pass = v; })
       );
       if (mode === "create") {
-        var net = el("div", "bt-field");
-        var ns = el("div", "seg");
+        var netRow = el("label", "opt");
+        netRow.appendChild(txt("span", "opt-name", tr("Соединение", "Connection")));
+        var netSel = el("select");
+        netSel.dataset.fk = "bt:net";
         NETS.forEach(function (n) {
-          var b = txt("button", f.net === n[0] ? "on" : "", n[1]);
-          b.type = "button";
-          b.dataset.fk = "bt-net:" + n[0];
-          b.addEventListener("click", function () {
-            f.net = n[0];
-            render();
-          });
-          ns.appendChild(b);
+          netSel.appendChild(el("option", "", { value: n[0], textContent: n[1] }));
         });
-        append(net, txt("span", "", tr("Соединение", "Connection")), ns);
-        body.appendChild(net);
+        netSel.value = f.net || "auto";
+        netSel.addEventListener("change", function () {
+          f.net = netSel.value;
+          render();
+        });
+        netRow.appendChild(netSel);
+        body.appendChild(netRow);
       }
       body.appendChild(txt("div", "sub", mode === "create"
-        ? tr("Передайте второму игроку название и пароль любым способом. Он выберет «Подключиться».", "Send the room name and password to the other player any way you like. They choose “Join”.")
-        : tr("Введите название и пароль, которые прислал создатель комнаты.", "Enter the name and password from the room creator.")));
+        ? tr("Передайте второму игроку название и пароль.", "Send the room name and password to the other player.")
+        : tr("Введите название и пароль от создателя комнаты.", "Enter the room name and password.")));
     }
     if (error) body.appendChild(txt("div", "bt-error", error));
 
     var foot = el("div", "pb-foot bt-foot");
-    var go = el("button", "bt-go", { type: "submit", textContent: busy ? tr("Подключение…", "Connecting…") : ACTION[mode], disabled: busy });
-    go.dataset.fk = "bt:submit";
+    var go = kaiItem(busy ? tr("Подключение…", "Connecting…") : ACTION[mode], "bt:submit", "kai-btn" + (busy ? " disabled" : ""), submitForm);
     foot.appendChild(go);
     if (mode === "create") {
-      var cp = el("button", "ghost", { type: "button", textContent: tr("Скопировать", "Copy") });
-      cp.dataset.fk = "bt:copy";
-      cp.addEventListener("click", function () { copy(cp, form[mode]); });
+      var cp = kaiItem(tr("Скопировать", "Copy"), "bt:copy", "kai-btn ghost", function () { copy(cp, form[mode]); });
       foot.appendChild(cp);
     }
     append(box, head, who, body, foot);
@@ -293,62 +307,16 @@ var BtRoom = (function () {
         if (list[i].classList.contains("kbd-focus")) { idx = i; break; }
       }
     }
-    if (idx < 0) {
-      setFocusEl(list[0]);
-      return;
-    }
-    if (dir === "left" || dir === "right") {
-      idx = (idx + (dir === "right" ? 1 : -1) + list.length) % list.length;
-      setFocusEl(list[idx]);
-      return;
-    }
-    var rects = list.map(function (el) {
-      var r = el.getBoundingClientRect();
-      return { el: el, cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2 };
-    });
-    var c = rects[idx];
-    var bestIdx = -1, bestScore = Infinity;
-    for (var j = 0; j < rects.length; j++) {
-      if (j === idx) continue;
-      var dy = dir === "down" ? (rects[j].cy - c.cy) : (c.cy - rects[j].cy);
-      if (dy <= 10) continue;
-      var score = dy * 2 + Math.abs(rects[j].cx - c.cx);
-      if (score < bestScore) {
-        bestScore = score;
-        bestIdx = j;
-      }
-    }
-    if (bestIdx < 0) bestIdx = dir === "down" ? 0 : list.length - 1;
-    setFocusEl(list[bestIdx]);
+    if (idx < 0) idx = 0;
+    else idx = (idx + (dir === "down" || dir === "right" ? 1 : -1) + list.length) % list.length;
+    setFocusEl(list[idx]);
   }
 
-  function activateFocused() {
-    var target = document.activeElement;
-    if (!overlay.contains(target) || target === box) {
-      var list = focusables();
-      for (var i = 0; i < list.length; i++) {
-        if (list[i].classList.contains("kbd-focus")) { target = list[i]; break; }
-      }
-    }
-    if (!target || target === box) return;
-    if (target.tagName === "INPUT") {
-      var submitBtn = box.querySelector('button[type="submit"]');
-      if (submitBtn) submitBtn.click();
-      return;
-    }
-    target.click();
+  function stopEvent(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
   }
-
-  function softLeftAction() {
-    if (mode === "create") {
-      var cp = box.querySelector('button[data-fk="bt:copy"]');
-      copy(cp, form[mode]);
-    }
-  }
-
-  skLeft.addEventListener("click", softLeftAction);
-  skCenter.addEventListener("click", activateFocused);
-  skRight.addEventListener("click", function () { close(false); });
 
   box.addEventListener("focusin", function (e) {
     if (e.target && e.target !== box && e.target.dataset && e.target.dataset.fk) {
@@ -361,48 +329,32 @@ var BtRoom = (function () {
 
   box.addEventListener("submit", function (e) {
     e.preventDefault();
-    if (busy || !done) return;
-    var f = form[mode];
-    form.name = form.name.trim();
-    if (mode !== "near") {
-      f.room = f.room.trim();
-      if (!f.room) return render(tr("Введите название комнаты", "Enter a room name"));
-    }
-    busy = true;
-    render();
-    done.attempt({ mode: mode, room: mode === "near" ? "" : f.room, pass: mode === "near" ? "" : f.pass, net: mode === "create" ? f.net : "auto", name: form.name }).then(function () {
-      remember(form.name);
-      busy = false;
-      close(true);
-    }, function (msg) {
-      busy = false;
-      render(msg);
-    });
+    submitForm();
   });
 
-  var backdrop = false;
-  overlay.addEventListener(PTR_DOWN, function (e) {
-    backdrop = e.target === overlay;
-  }, true);
   overlay.addEventListener("click", function (e) {
     if (Date.now() - openedAt < 350) {
       e.preventDefault();
       e.stopPropagation();
-      return;
     }
-    if (e.target === overlay && backdrop) close(false);
   }, true);
-  overlay.addEventListener("keydown", function (e) {
-    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
-    e.stopPropagation();
 
-    if (e.key === "SoftLeft") {
-      e.preventDefault();
-      softLeftAction();
+  window.addEventListener("keydown", function (e) {
+    if (overlay.hidden) return;
+    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
+
+    if (e.key === "SoftLeft" || e.key === "Escape") {
+      stopEvent(e);
+      if (mode === "create") {
+        var cp = box.querySelector('[data-fk="bt:copy"]');
+        copy(cp, form[mode]);
+      } else {
+        close(false);
+      }
       return;
     }
-    if (e.key === "SoftRight" || e.key === "Escape") {
-      e.preventDefault();
+    if (e.key === "SoftRight") {
+      stopEvent(e);
       close(false);
       return;
     }
@@ -410,41 +362,63 @@ var BtRoom = (function () {
     var active = document.activeElement;
     if (e.key === "Backspace") {
       if (active && active.tagName === "INPUT" && (active.value || "").length > 0) return;
-      e.preventDefault();
+      stopEvent(e);
       close(false);
       return;
     }
+    if (e.key === "Enter") {
+      if (active && active.tagName === "SELECT") return;
+      stopEvent(e);
+      if (active && active._activate) active._activate();
+      else submitForm();
+      return;
+    }
     if (e.key === "ArrowUp") {
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("up");
       return;
     }
     if (e.key === "ArrowDown") {
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("down");
       return;
     }
     if (e.key === "ArrowLeft") {
       if (active && active.tagName === "INPUT" && typeof active.selectionStart === "number" && active.selectionStart > 0) return;
-      e.preventDefault();
+      if (active && active.tagName === "SELECT" && active.selectedIndex > 0) {
+        stopEvent(e);
+        active.selectedIndex--;
+        var ev1 = document.createEvent("Event");
+        ev1.initEvent("change", true, true);
+        active.dispatchEvent(ev1);
+        return;
+      }
+      stopEvent(e);
       moveFocus("left");
       return;
     }
     if (e.key === "ArrowRight") {
       if (active && active.tagName === "INPUT" && typeof active.selectionStart === "number" && active.selectionStart < (active.value || "").length) return;
-      e.preventDefault();
+      if (active && active.tagName === "SELECT" && active.selectedIndex < active.options.length - 1) {
+        stopEvent(e);
+        active.selectedIndex++;
+        var ev2 = document.createEvent("Event");
+        ev2.initEvent("change", true, true);
+        active.dispatchEvent(ev2);
+        return;
+      }
+      stopEvent(e);
       moveFocus("right");
-      return;
     }
-  });
-  overlay.addEventListener("keyup", function (e) {
-    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
-    e.stopPropagation();
-  });
+  }, true);
 
-  window.addEventListener("resize", function () {
-    if (!overlay.hidden) updateSoftkeys();
-  });
+  window.addEventListener("keyup", function (e) {
+    if (overlay.hidden) return;
+    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
+    if (e.key === "SoftLeft" || e.key === "Escape" || e.key === "SoftRight") {
+      e.stopPropagation();
+    }
+  }, true);
 
   form.name = queryParam("btname") || stored() || "Player" + rnd(2);
   fresh();

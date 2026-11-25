@@ -1,5 +1,4 @@
 var Files = (function () {
-  var PTR_DOWN = "PointerEvent" in window ? "pointerdown" : "mousedown";
   var T9_MAP = {
     "0": "0 ",
     "1": "1._-",
@@ -16,16 +15,18 @@ var Files = (function () {
   var overlay = el("div", "", { id: "files", hidden: true });
   var box = el("div", "panel-box fm-box", { tabIndex: -1 });
   var picker = el("input", "", { type: "file", multiple: true, hidden: true });
-  var skBar = el("div", "kaios-softkeys", { id: "files-softkeys" });
-  var skLeft = el("button", "kaios-sk-btn kaios-sk-left", { type: "button" });
-  var skCenter = el("button", "kaios-sk-btn kaios-sk-center", { type: "button" });
-  var skRight = el("button", "kaios-sk-btn kaios-sk-right", { type: "button" });
+  var optMenu = el("div", "kai-opt-overlay", { hidden: true });
+  var skBar = el("div", "kai-softkeys", { id: "files-softkeys" });
+  var skLeft = el("span", "sk-l");
+  var skCenter = el("span", "sk-c");
+  var skRight = el("span", "sk-r");
 
-  var cwd = "/", armed = null, making = false, error = "", backdrop = false, url = null;
-  var focusTargetKey = null, t9Query = "", t9Timer = 0;
+  var cwd = "/", making = false, error = "", url = null;
+  var focusTargetKey = null, selectedEntry = null, menuState = null;
+  var t9Query = "", t9Timer = 0;
 
   append(skBar, skLeft, skCenter, skRight);
-  append(overlay, box, picker, skBar);
+  append(overlay, box, picker, optMenu, skBar);
 
   function el(tag, cls, props) {
     var e = document.createElement(tag);
@@ -46,12 +47,6 @@ var Files = (function () {
 
   function txt(tag, cls, text) {
     return el(tag, cls, { textContent: text });
-  }
-
-  function btn(cls, text, title, fn) {
-    var b = el("button", cls, { type: "button", textContent: text, title: title || "" });
-    b.addEventListener("click", fn);
-    return b;
   }
 
   function join(dir, name) {
@@ -90,7 +85,6 @@ var Files = (function () {
   }
 
   function act(fn) {
-    armed = null;
     error = "";
     fn();
     fs.syncStore();
@@ -128,17 +122,16 @@ var Files = (function () {
     });
   }
 
-  function scrollIntoBox(target) {
-    if (!target || !box) return;
-    var bRect = box.getBoundingClientRect();
+  function scrollIntoBox(container, target) {
+    if (!target || !container) return;
+    var bRect = container.getBoundingClientRect();
     var tRect = target.getBoundingClientRect();
-    var bottomPad = skBar.hidden ? 8 : 34;
-    if (tRect.top < bRect.top + 4) box.scrollTop -= (bRect.top + 4 - tRect.top);
-    else if (tRect.bottom > bRect.bottom - bottomPad) box.scrollTop += (tRect.bottom - (bRect.bottom - bottomPad));
+    if (tRect.top < bRect.top + 4) container.scrollTop -= (bRect.top + 4 - tRect.top);
+    else if (tRect.bottom > bRect.bottom - 32) container.scrollTop += (tRect.bottom - (bRect.bottom - 32));
   }
 
   function focusables() {
-    var list = Array.prototype.slice.call(box.querySelectorAll("button:not(:disabled), input:not(:disabled)"));
+    var list = Array.prototype.slice.call(box.querySelectorAll(".kai-item, input:not(:disabled)"));
     return list.filter(function (node) { return node.offsetParent !== null; });
   }
 
@@ -148,7 +141,8 @@ var Files = (function () {
     if (!target) return;
     target.classList.add("kbd-focus");
     if (target.dataset && target.dataset.fk) focusTargetKey = target.dataset.fk;
-    scrollIntoBox(target);
+    selectedEntry = target._entry || null;
+    scrollIntoBox(box, target);
     if (target.focus) {
       try { target.focus({ preventScroll: true }); } catch (err) { target.focus(); }
     }
@@ -166,85 +160,25 @@ var Files = (function () {
         }
       }
     }
-    if (!match) {
-      for (var j = 0; j < list.length; j++) {
-        if (list[j].dataset && /^row:|^open:/.test(list[j].dataset.fk || "")) {
-          match = list[j];
-          break;
-        }
-      }
-    }
-    if (!match) {
-      for (var k = 0; k < list.length; k++) {
-        if (!list[k].classList.contains("pb-close")) {
-          match = list[k];
-          break;
-        }
-      }
-    }
     setFocusEl(match || list[0]);
   }
 
   function updateSoftkeys() {
-    var compact = (typeof ScreenSetup !== "undefined" && ScreenSetup.isCompact) ? ScreenSetup.isCompact() : (Math.min(innerWidth, innerHeight) <= 360);
-    skBar.hidden = !compact;
-    if (skBar.hidden) return;
-    if (making) {
-      skLeft.textContent = tr("Создать", "Create");
-      skCenter.textContent = "OK";
-      skRight.textContent = tr("Отмена", "Cancel");
-    } else {
-      skLeft.textContent = tr("Загрузить", "Upload");
-      skCenter.textContent = tr("ОТКРЫТЬ", "OPEN");
+    if (menuState) {
+      skLeft.textContent = tr("Назад", "Back");
+      skCenter.textContent = tr("ВЫБРАТЬ", "SELECT");
       skRight.textContent = tr("Закрыть", "Close");
+      return;
     }
-  }
-
-  function crumbs() {
-    var wrap = el("div", "fm-path");
-    var parts = cwd === "/" ? [] : cwd.slice(1).split("/");
-    var rootBtn = btn("fm-crumb", tr("Телефон", "Phone"), "", function () { cd("/"); });
-    rootBtn.dataset.fk = "crumb:0";
-    wrap.appendChild(rootBtn);
-    parts.forEach(function (p, i) {
-      var path = "/" + parts.slice(0, i + 1).join("/");
-      var b = btn("fm-crumb", p, "", function () { cd(path); });
-      b.dataset.fk = "crumb:" + (i + 1);
-      append(wrap, txt("span", "fm-sep", "/"), b);
-    });
-    return wrap;
-  }
-
-  function row(e) {
-    var r = el("div", "fm-row" + (e.isDir ? " fm-dir" : ""));
-    var open = btn("fm-name", "", e.isDir ? tr("Открыть", "Open") : tr("Скачать", "Download"), function () {
-      if (e.isDir) cd(e.path);
-      else download(e.path);
-    });
-    open.dataset.fk = "open:" + e.path;
-    open.dataset.entryName = e.name;
-    append(open, txt("span", "fm-icon", e.isDir ? "📁" : "📄"), txt("span", "fm-label", e.name));
-    if (!e.isDir) open.appendChild(txt("span", "fm-meta", human(e.size)));
-    r.appendChild(open);
-    if (!e.isDir) {
-      var dl = btn("fm-act", "⬇", tr("Скачать", "Download"), function () { download(e.path); });
-      dl.dataset.fk = "dl:" + e.path;
-      r.appendChild(dl);
+    if (making) {
+      skLeft.textContent = tr("Отмена", "Cancel");
+      skCenter.textContent = tr("СОЗДАТЬ", "CREATE");
+      skRight.textContent = tr("Закрыть", "Close");
+      return;
     }
-    var del = btn("fm-act del" + (armed === e.path ? " confirm" : ""), armed === e.path ? tr("Удалить?", "Delete?") : "✕", tr("Удалить", "Delete"), function () {
-      if (armed !== e.path) {
-        armed = e.path;
-        focusTargetKey = "del:" + e.path;
-        return render();
-      }
-      act(function () {
-        if (!remove(e.path)) error = tr("«" + e.name + "» сейчас открыт игрой", "“" + e.name + "” is open by the game");
-        else focusTargetKey = null;
-      });
-    });
-    del.dataset.fk = "del:" + e.path;
-    r.appendChild(del);
-    return r;
+    skLeft.textContent = cwd === "/" ? tr("Закрыть", "Close") : tr("Наверх", "Up");
+    skCenter.textContent = tr("ОТКРЫТЬ", "OPEN");
+    skRight.textContent = tr("Опции", "Options");
   }
 
   function render(msg) {
@@ -264,33 +198,15 @@ var Files = (function () {
     var title = el("div", "pb-title");
     append(title,
       txt("b", "", tr("Файлы телефона", "Phone files")),
-      txt("span", "", tr("Общие для всех игр: карта памяти, память телефона, сохранения", "Shared by all games: memory card, phone memory, saves")));
-    var closeBtn = btn("pb-close", "✕", tr("Закрыть", "Close"), close);
-    closeBtn.dataset.fk = "head:close";
-    append(head, title, closeBtn);
+      txt("span", "", cwd));
+    head.appendChild(title);
 
     var tools = el("section", "fm-tools");
-    tools.appendChild(crumbs());
-    var bar = el("div", "fm-bar");
-    var upBtn = btn("fm-btn", tr("Загрузить", "Upload"), tr("Загрузить файлы в эту папку", "Upload files to this folder"), function () { picker.click(); });
-    upBtn.dataset.fk = "tool:upload";
-    var mkBtn = btn("fm-btn ghost", tr("Новая папка", "New folder"), "", function () {
-      making = !making;
-      armed = null;
-      focusTargetKey = making ? "new:name" : "tool:new";
-      render();
-    });
-    mkBtn.dataset.fk = "tool:new";
-    append(bar, upBtn, mkBtn);
-    tools.appendChild(bar);
-
     if (making) {
       var form = el("form", "fm-new");
       var name = el("input", "", { placeholder: tr("Имя папки", "Folder name"), maxLength: 64, spellcheck: false, autocapitalize: "none" });
       name.dataset.fk = "new:name";
-      var submit = el("button", "fm-btn", { type: "submit", textContent: tr("Создать", "Create") });
-      submit.dataset.fk = "new:submit";
-      append(form, name, submit);
+      form.appendChild(name);
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         folder(name.value);
@@ -301,28 +217,125 @@ var Files = (function () {
 
     var rows = el("section", "fm-list");
     if (cwd !== "/") {
-      var up = btn("fm-name", "", tr("Наверх", "Up"), function () { cd(fs.dirname(cwd)); });
+      var up = el("div", "kai-item fm-row fm-dir", { tabIndex: 0 });
       up.dataset.fk = "row:up";
+      up._activate = function () { cd(fs.dirname(cwd)); };
       append(up, txt("span", "fm-icon", "↩"), txt("span", "fm-label", ".."));
-      var r = el("div", "fm-row fm-dir");
-      r.appendChild(up);
-      rows.appendChild(r);
+      rows.appendChild(up);
     }
-    list.forEach(function (e) { rows.appendChild(row(e)); });
-    if (!list.length) rows.appendChild(txt("div", "sub fm-empty", tr("Папка пуста. Файлы можно перетащить сюда.", "Folder is empty. Drop files here.")));
+    list.forEach(function (e) {
+      var r = el("div", "kai-item fm-row" + (e.isDir ? " fm-dir" : ""), { tabIndex: 0 });
+      r.dataset.fk = "open:" + e.path;
+      r.dataset.entryName = e.name;
+      r._entry = e;
+      r._activate = function () {
+        if (e.isDir) cd(e.path);
+        else download(e.path);
+      };
+      append(r, txt("span", "fm-icon", e.isDir ? "📁" : "📄"), txt("span", "fm-label", e.name));
+      if (!e.isDir) r.appendChild(txt("span", "fm-meta", human(e.size)));
+      rows.appendChild(r);
+    });
+    if (!list.length) rows.appendChild(txt("div", "sub fm-empty", tr("Папка пуста. Опции (RSK) → Загрузить.", "Folder is empty. Options (RSK) → Upload.")));
 
-    append(box, head, tools, rows);
+    append(box, head);
+    if (making || error) box.appendChild(tools);
+    box.appendChild(rows);
     box.scrollTop = scroll;
     updateSoftkeys();
-    if (!overlay.hidden) restoreFocus();
+    if (!overlay.hidden && !menuState) restoreFocus();
+  }
+
+  function closeOptions() {
+    if (!menuState) return;
+    optMenu.hidden = true;
+    optMenu.textContent = "";
+    menuState = null;
+    updateSoftkeys();
+    restoreFocus();
+  }
+
+  function focusMenuIndex(idx) {
+    if (!menuState || !menuState.items.length) return;
+    var n = menuState.items.length;
+    menuState.idx = ((idx % n) + n) % n;
+    for (var i = 0; i < n; i++) {
+      menuState.items[i].classList.toggle("kbd-focus", i === menuState.idx);
+    }
+    var target = menuState.items[menuState.idx];
+    if (target.focus) {
+      try { target.focus({ preventScroll: true }); } catch (err) { target.focus(); }
+    }
+    scrollIntoBox(menuState.box, target);
+  }
+
+  function openOptions() {
+    closeOptions();
+    var mbox = el("div", "opt-box");
+    mbox.appendChild(txt("div", "opt-title", selectedEntry ? selectedEntry.name : tr("Файлы", "Files")));
+    var items = [];
+
+    function addOpt(label, confirmLabel, fn) {
+      var item = el("div", "opt-item", { tabIndex: 0, textContent: label });
+      item._activate = function () {
+        if (confirmLabel && !item.classList.contains("confirm")) {
+          item.classList.add("confirm");
+          item.textContent = confirmLabel;
+          return;
+        }
+        closeOptions();
+        fn();
+      };
+      item.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        item._activate();
+      });
+      mbox.appendChild(item);
+      items.push(item);
+    }
+
+    if (selectedEntry) {
+      var e = selectedEntry;
+      addOpt(e.isDir ? tr("Открыть папку", "Open folder") : tr("Скачать файл", "Download file"), null, function () {
+        if (e.isDir) cd(e.path);
+        else download(e.path);
+      });
+    }
+    addOpt(tr("Загрузить сюда", "Upload here"), null, function () {
+      picker.click();
+    });
+    addOpt(tr("Новая папка", "New folder"), null, function () {
+      making = true;
+      focusTargetKey = "new:name";
+      render();
+    });
+    if (selectedEntry) {
+      var delEntry = selectedEntry;
+      addOpt(tr("Удалить", "Delete"), tr("Точно удалить? (OK)", "Confirm delete? (OK)"), function () {
+        act(function () {
+          if (!remove(delEntry.path)) error = tr("«" + delEntry.name + "» сейчас открыт игрой", "“" + delEntry.name + "” is open by the game");
+          else focusTargetKey = null;
+        });
+      });
+    }
+    addOpt(tr("Закрыть менеджер", "Close manager"), null, function () {
+      close();
+    });
+
+    optMenu.textContent = "";
+    optMenu.appendChild(mbox);
+    optMenu.hidden = false;
+    menuState = { box: mbox, items: items, idx: 0 };
+    focusMenuIndex(0);
+    updateSoftkeys();
   }
 
   function cd(path) {
     cwd = path;
-    armed = null;
     making = false;
     error = "";
     focusTargetKey = null;
+    selectedEntry = null;
     box.scrollTop = 0;
     render();
   }
@@ -334,8 +347,8 @@ var Files = (function () {
   }
 
   function close() {
+    closeOptions();
     overlay.hidden = true;
-    armed = null;
     making = false;
     error = "";
     focusTargetKey = null;
@@ -352,43 +365,15 @@ var Files = (function () {
         if (list[i].classList.contains("kbd-focus")) { idx = i; break; }
       }
     }
-    if (idx < 0) {
-      setFocusEl(list[0]);
-      return;
-    }
-
-    if (dir === "left" || dir === "right") {
-      idx = (idx + (dir === "right" ? 1 : -1) + list.length) % list.length;
-      setFocusEl(list[idx]);
-      return;
-    }
-
-    var rects = list.map(function (el) {
-      var r = el.getBoundingClientRect();
-      return { el: el, cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2 };
-    });
-    var c = rects[idx];
-    var bestIdx = -1;
-    var bestScore = Infinity;
-    for (var j = 0; j < rects.length; j++) {
-      if (j === idx) continue;
-      var dy = dir === "down" ? (rects[j].cy - c.cy) : (c.cy - rects[j].cy);
-      if (dy <= 10) continue;
-      var score = dy * 2 + Math.abs(rects[j].cx - c.cx);
-      if (score < bestScore) {
-        bestScore = score;
-        bestIdx = j;
-      }
-    }
-    if (bestIdx < 0) bestIdx = dir === "down" ? 0 : list.length - 1;
-    setFocusEl(list[bestIdx]);
+    if (idx < 0) idx = 0;
+    else idx = (idx + (dir === "down" || dir === "right" ? 1 : -1) + list.length) % list.length;
+    setFocusEl(list[idx]);
   }
 
   function jumpT9(digit) {
     if (t9Timer) clearTimeout(t9Timer);
     t9Query += digit;
     t9Timer = setTimeout(function () { t9Query = ""; t9Timer = 0; }, 1200);
-
     var parts = [];
     for (var i = 0; i < t9Query.length; i++) {
       var chars = T9_MAP[t9Query.charAt(i)] || t9Query.charAt(i);
@@ -405,45 +390,18 @@ var Files = (function () {
     }
   }
 
-  function activateFocused() {
-    var target = document.activeElement;
-    if (!overlay.contains(target) || target === box) {
-      var list = focusables();
-      for (var i = 0; i < list.length; i++) {
-        if (list[i].classList.contains("kbd-focus")) { target = list[i]; break; }
-      }
-    }
-    if (!target || target === box) return;
-    if (target.tagName === "INPUT" && target.form) {
-      var sub = target.form.querySelector('button[type="submit"]');
-      if (sub) sub.click();
-      return;
-    }
-    target.click();
+  function stopEvent(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
   }
 
-  function softLeftAction() {
-    if (making) {
-      var inp = box.querySelector('input[data-fk="new:name"]');
-      if (inp) folder(inp.value);
-    } else {
-      picker.click();
-    }
+  function higherModalOpen() {
+    var mc = document.getElementById("midlet-chooser");
+    if (mc && mc.style.display !== "none") return true;
+    if (window.BtRoom && BtRoom.isOpen && BtRoom.isOpen()) return true;
+    return false;
   }
-
-  function softRightAction() {
-    if (making) {
-      making = false;
-      focusTargetKey = "tool:new";
-      render();
-    } else {
-      close();
-    }
-  }
-
-  skLeft.addEventListener("click", softLeftAction);
-  skCenter.addEventListener("click", activateFocused);
-  skRight.addEventListener("click", softRightAction);
 
   box.addEventListener("focusin", function (e) {
     if (e.target && e.target !== box && e.target.dataset && e.target.dataset.fk) {
@@ -451,6 +409,7 @@ var Files = (function () {
       for (var i = 0; i < list.length; i++) list[i].classList.remove("kbd-focus");
       e.target.classList.add("kbd-focus");
       focusTargetKey = e.target.dataset.fk;
+      selectedEntry = e.target._entry || null;
     }
   });
 
@@ -470,71 +429,100 @@ var Files = (function () {
     overlay.classList.remove("drop");
     upload(e.dataTransfer.files);
   });
-  overlay.addEventListener(PTR_DOWN, function (e) {
-    backdrop = e.target === overlay;
-  });
-  overlay.addEventListener("click", function (e) {
-    if (e.target === overlay && backdrop) close();
-  });
-  overlay.addEventListener("keydown", function (e) {
-    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
-    e.stopPropagation();
 
-    if (e.key === "SoftLeft"||e.key === "F1") {
-      e.preventDefault();
-      softLeftAction();
+  window.addEventListener("keydown", function (e) {
+    if (overlay.hidden || higherModalOpen()) return;
+    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
+
+    if (menuState) {
+      if (e.key === "ArrowDown") {
+        stopEvent(e);
+        focusMenuIndex(menuState.idx + 1);
+      } else if (e.key === "ArrowUp") {
+        stopEvent(e);
+        focusMenuIndex(menuState.idx - 1);
+      } else if (e.key === "Enter") {
+        stopEvent(e);
+        menuState.items[menuState.idx]._activate();
+      } else if (e.key === "SoftLeft" || e.key === "Escape" || e.key === "SoftRight" || e.key === "Backspace") {
+        stopEvent(e);
+        closeOptions();
+      }
       return;
     }
-    if (e.key === "SoftRight" || e.key === "Escape") {
-      e.preventDefault();
-      softRightAction();
+
+    if (e.key === "SoftRight") {
+      stopEvent(e);
+      if (making) close();
+      else openOptions();
+      return;
+    }
+    if (e.key === "SoftLeft" || e.key === "Escape") {
+      stopEvent(e);
+      if (making) {
+        making = false;
+        focusTargetKey = null;
+        render();
+      } else if (cwd !== "/") {
+        cd(fs.dirname(cwd));
+      } else {
+        close();
+      }
       return;
     }
 
     var active = document.activeElement;
     if (e.key === "Backspace") {
       if (active && active.tagName === "INPUT" && (active.value || "").length > 0) return;
-      e.preventDefault();
-      if (making) softRightAction();
-      else if (cwd !== "/") cd(fs.dirname(cwd));
-      else close();
+      stopEvent(e);
+      if (making) {
+        making = false;
+        focusTargetKey = null;
+        render();
+      } else if (cwd !== "/") {
+        cd(fs.dirname(cwd));
+      } else {
+        close();
+      }
+      return;
+    }
+    if (e.key === "Enter") {
+      stopEvent(e);
+      if (making) {
+        var inp = box.querySelector('input[data-fk="new:name"]');
+        if (inp) folder(inp.value);
+        return;
+      }
+      if (active && active._activate) active._activate();
+      else if (selectedEntry) {
+        if (selectedEntry.isDir) cd(selectedEntry.path);
+        else download(selectedEntry.path);
+      }
       return;
     }
     if (e.key === "ArrowUp") {
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("up");
       return;
     }
     if (e.key === "ArrowDown") {
-      e.preventDefault();
+      stopEvent(e);
       moveFocus("down");
       return;
     }
-    if (e.key === "ArrowLeft") {
-      if (active && active.tagName === "INPUT" && typeof active.selectionStart === "number" && active.selectionStart > 0) return;
-      e.preventDefault();
-      moveFocus("left");
-      return;
-    }
-    if (e.key === "ArrowRight") {
-      if (active && active.tagName === "INPUT" && typeof active.selectionStart === "number" && active.selectionStart < (active.value || "").length) return;
-      e.preventDefault();
-      moveFocus("right");
-      return;
-    }
     if ((!active || active.tagName !== "INPUT") && e.key >= "0" && e.key <= "9" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault();
+      stopEvent(e);
       jumpT9(e.key);
     }
-  });
-  overlay.addEventListener("keyup", function (e) {
-    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
-    e.stopPropagation();
-  });
+  }, true);
 
-  window.addEventListener("resize", function () {
-    if (!overlay.hidden) updateSoftkeys();
-  });
+  window.addEventListener("keyup", function (e) {
+    if (overlay.hidden || higherModalOpen()) return;
+    if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
+    if (e.key === "SoftLeft" || e.key === "Escape" || e.key === "SoftRight") {
+      e.stopPropagation();
+    }
+  }, true);
 
   function mount() {
     document.body.appendChild(overlay);

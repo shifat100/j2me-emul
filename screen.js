@@ -46,49 +46,15 @@ var ScreenSetup = (function () {
 
   var result = null, observeTimer = 0, listeners = [];
 
-  function isKaiOS() {
-    return /\bKAIOS\b/i.test(navigator.userAgent || "");
-  }
-
-  function isTinyScreen() {
-    var w = window.innerWidth || 0;
-    var h = window.innerHeight || 0;
-    return Math.min(w, h) <= 280 && Math.max(w, h) <= 360;
-  }
-
-  function isCompactUI() {
-    return isKaiOS() || isTinyScreen();
-  }
-
-  function append(parent) {
-    for (var i = 1; i < arguments.length; i++) {
-      var child = arguments[i];
-      if (child != null) parent.appendChild(child);
-    }
-    return parent;
-  }
-
-  function syncBodyClasses() {
-    if (!document.body) return;
-    document.body.classList.toggle("kaios-ui", isCompactUI());
-    var hideKeypad = typeof config !== "undefined" && config && ((config.keypad | 0) === 0);
-    document.body.classList.toggle("keypad-hidden", hideKeypad);
-  }
-
-  function applyCompactDefaults() {
+  function syncScaleMode() {
     if (typeof config === "undefined" || !config) return;
-    var hasCustomKeypad = false;
-    try {
-      var res = typeof Settings !== "undefined" && Settings.resolve ? Settings.resolve(config.gameId) : null;
-      hasCustomKeypad = !!(res && res.own && res.own.keypad);
-    } catch (e) {}
-
-    if (isCompactUI() && !(config.urlLocked && config.urlLocked.keypad) && !hasCustomKeypad) {
-      config.keypad = 0;
-      var kp = document.getElementById("keypad");
-      if (kp) kp.className = "keypad-0";
+    config.keypad = 0;
+    if (config.scale === 101) config.scaleMode = "stretch";
+    else if (config.scale === 100) config.scaleMode = "fit";
+    else if (!config.scaleMode) config.scaleMode = "num";
+    if (document.body) {
+      document.body.classList.add("kaios-ui", "keypad-hidden");
     }
-    syncBodyClasses();
   }
 
   function add(map, size, score, why) {
@@ -111,30 +77,30 @@ var ScreenSetup = (function () {
     ATTRS.forEach(function (a) {
       if (mf[a[0]] == null) return;
       used[a[0]] = true;
-      add(map, sizeOf(mf[a[0]]), a[1], "манифест: " + a[0] + ": " + mf[a[0]]);
+      add(map, sizeOf(mf[a[0]]), a[1], "manifest: " + a[0]);
     });
     PAIRS.forEach(function (p) {
       var w = parseInt(mf[p[0]], 10), h = parseInt(mf[p[1]], 10);
       if (w >= 64 && h >= 64 && w <= 1280 && h <= 1280) {
-        add(map, w + "x" + h, 100, "манифест: " + p[0] + "/" + p[1]);
+        add(map, w + "x" + h, 100, "manifest: " + p[0] + "/" + p[1]);
         used[p[0]] = used[p[1]] = true;
       }
     });
     Object.keys(mf).forEach(function (k) {
       if (used[k] || /^MIDlet-(Version|\d+)$/.test(k)) return;
       var s = /screen|display|resolution|lcd|size/i.test(k) && sizeOf(mf[k]);
-      if (s) add(map, s, 70, "манифест: " + k + ": " + mf[k]);
+      if (s) add(map, s, 70, "manifest: " + k);
     });
     ["MIDlet-Name", "MIDlet-Description", "MIDlet-Jar-URL", "MIDlet-Info-URL"].forEach(function (k) {
       var s = sizeOf(mf[k]);
-      if (s) add(map, s, 40, "манифест: " + k);
+      if (s) add(map, s, 40, "manifest: " + k);
     });
   }
 
   function fromName(name, mf, map) {
     var base = name.replace(/^.*[\/:]/, "").replace(/\.jar$/i, "");
     var s = sizeOf(base);
-    if (s) add(map, s, 70, "имя файла: " + base);
+    if (s) add(map, s, 70, "filename: " + base);
     var text = base + " " + (mf["MIDlet-Name"] || "") + " " + (mf["MIDlet-Description"] || "");
     var hit = false;
     MODELS.forEach(function (m) {
@@ -142,7 +108,7 @@ var ScreenSetup = (function () {
       var r = m[1].exec(text);
       if (!r) return;
       hit = true;
-      add(map, m[0], m[2] || 35, "модель телефона: " + r[2]);
+      add(map, m[0], m[2] || 35, "model: " + r[2]);
     });
   }
 
@@ -178,9 +144,9 @@ var ScreenSetup = (function () {
       if (KNOWN.indexOf(k) >= 0 && im[0] !== im[1] && im[0] >= 96 && !/icon|logo/i.test(im[2])) full[k] = (full[k] || 0) + 1;
     });
     Object.keys(full).forEach(function (k) {
-      add(map, k, Math.min(25, full[k] * 10), "картинки на весь экран: " + full[k] + " шт. " + k.replace("x", "×"));
+      add(map, k, Math.min(25, full[k] * 10), "images: " + k);
       var d = k.split("x"), dbl = d[0] * 2 + "x" + d[1] * 2;
-      if (map[dbl]) add(map, dbl, Math.min(15, full[k] * 5), "фон " + k.replace("x", "×") + " растягивается вдвое");
+      if (map[dbl]) add(map, dbl, Math.min(15, full[k] * 5), "scaled: " + dbl);
     });
   }
 
@@ -296,7 +262,7 @@ var ScreenSetup = (function () {
     KNOWN.forEach(function (k) {
       var d = k.split("x"), cw = stat.count[d[0]] || 0, ch = stat.count[d[1]] || 0, pr = stat.pair[k] || 0;
       if (d[0] === d[1] || +d[0] < 120 || +d[1] < 120 || pr < 2) return;
-      add(map, k, Math.min(60, pr * 10) + Math.min(10, Math.min(cw, ch)), "код игры: пары " + k.replace("x", "×") + " ×" + pr);
+      add(map, k, Math.min(60, pr * 10) + Math.min(10, Math.min(cw, ch)), "code: " + k);
     });
   }
 
@@ -340,39 +306,13 @@ var ScreenSetup = (function () {
     listeners.forEach(function (fn) { fn(result); });
   }
 
-  function fitDisplayContainer() {
-    var container = document.getElementById("display-container");
-    var display = document.getElementById("display");
-    if (!container || !display) return;
-    container.style.transform = "";
-    container.style.transformOrigin = "center center";
-
-    var scaleVal = typeof config !== "undefined" && config ? (parseFloat(config.scale) || 1) : 1;
-    if (scaleVal > 1) return;
-
-    var kp = document.getElementById("keypad");
-    var kpH = kp && kp.offsetParent !== null ? kp.getBoundingClientRect().height : 0;
-    var availW = window.innerWidth || 0;
-    var availH = Math.max(80, (window.innerHeight || 0) - kpH);
-    var rect = display.getBoundingClientRect();
-    if (!availW || !availH || !rect.width || !rect.height) return;
-
-    if (rect.width > availW + 1 || rect.height > availH + 1) {
-      var fit = Math.min(availW / rect.width, availH / rect.height);
-      if (fit < 1) {
-        container.style.transform = "scale(" + fit.toFixed(4) + ")";
-      }
-    }
-  }
-
   function refit() {
-    syncBodyClasses();
+    syncScaleMode();
     document.body.classList.toggle("fixed-screen", !!(typeof config !== "undefined" && config && config.screen));
     if (typeof MIDP !== "undefined") {
       if (MIDP.updatePhysicalScreenSize) MIDP.updatePhysicalScreenSize();
       if (MIDP.updateCanvas) MIDP.updateCanvas();
     }
-    fitDisplayContainer();
     window.dispatchEvent(new Event("resize"));
   }
 
@@ -380,7 +320,7 @@ var ScreenSetup = (function () {
     if (config.screenMode === "manual") return config.screen;
     if (config.screenMode === "fit") return "";
     if (result && result.best) return result.best;
-    if (result && result.adaptive && window.innerWidth > window.innerHeight && isCompactUI()) {
+    if (result && result.adaptive && window.innerWidth > window.innerHeight) {
       return "320x240";
     }
     return "240x320";
@@ -463,7 +403,12 @@ var ScreenSetup = (function () {
           result.observed = top;
           emit();
         }
-        hint(top);
+        var toast = document.getElementById("kaios-toast");
+        if (toast) {
+          toast.textContent = tr("Размер экрана: ", "Detected: ") + top.replace("x", "×") + tr(" (Вызов → Настройки)", " (Call → Settings)");
+          toast.hidden = false;
+          setTimeout(function () { toast.hidden = true; }, 3500);
+        }
         return;
       }
       if (n < delays.length) observeTimer = setTimeout(tick, delays[n] - delays[n - 1]);
@@ -471,48 +416,13 @@ var ScreenSetup = (function () {
     observeTimer = setTimeout(tick, delays[0]);
   }
 
-  function hint(size) {
-    var key = "j2me.hint." + config.gameId;
-    try {
-      if (localStorage.getItem(key) === size) return;
-    } catch (e) {}
-    var bar = document.createElement("div");
-    bar.className = "screen-hint";
-    var text = document.createElement("span");
-    text.textContent = tr("Игра рисует только в углу " + size.replace("x", "×") + ". Поставить этот размер?", "The game only draws in a " + size.replace("x", "×") + " corner. Use this size?");
-    var yes = document.createElement("button");
-    yes.type = "button";
-    yes.textContent = tr("Поставить", "Apply");
-    var no = document.createElement("button");
-    no.type = "button";
-    no.className = "ghost";
-    no.textContent = tr("Не надо", "No");
-    append(bar, text, yes, no);
-    document.body.appendChild(bar);
-    yes.addEventListener("click", function () {
-      Settings.setGame(config.gameId, "screen", size);
-      location.reload();
-    });
-    no.addEventListener("click", function () {
-      try {
-        localStorage.setItem(key, size);
-      } catch (e) {}
-      bar.remove();
-    });
-  }
-
-  applyCompactDefaults();
-  window.addEventListener("resize", function () {
-    syncBodyClasses();
-    fitDisplayContainer();
-  });
+  syncScaleMode();
 
   return {
     detect: detect,
     jarLoaded: jarLoaded,
     started: function () {
       ScreenSetup.running = true;
-      fitDisplayContainer();
       observe();
     },
     apply: apply,
@@ -520,8 +430,7 @@ var ScreenSetup = (function () {
     refit: refit,
     result: function () { return result; },
     onChange: function (fn) { listeners.push(fn); },
-    isKaiOS: isKaiOS,
-    isCompact: isCompactUI,
+    isCompact: function () { return true; },
     running: false
   };
 })();

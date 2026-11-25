@@ -6,266 +6,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#12151b">
   <link rel="stylesheet" href="style/index.css">
-  <style id="kaios-index-style">
-    #t9-bar[hidden], #softkeys[hidden], #opt-menu[hidden] { display: none !important; }
-    #t9-bar {
-      padding: 2px 8px;
-      font-size: 11px;
-      background: #1d2430;
-      color: #9ecbff;
-      border-bottom: 1px solid #2b3444;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .app.kbd-focus, .app:focus {
-      outline: 2px solid #4da3ff;
-      outline-offset: -2px;
-      background: rgba(77, 163, 255, 0.16);
-    }
-    #opt-menu {
-      position: fixed;
-      left: 0; right: 0; top: 0; bottom: 0;
-      background: rgba(8, 10, 14, 0.72);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 40;
-      padding: 8px;
-      box-sizing: border-box;
-    }
-    .opt-box {
-      width: 100%;
-      max-width: 260px;
-      max-height: 100%;
-      overflow-y: auto;
-      background: #1b2029;
-      color: #eef2f7;
-      border: 1px solid #323b4a;
-      border-radius: 8px;
-      padding: 6px;
-      box-sizing: border-box;
-    }
-    .opt-title {
-      font-size: 12px;
-      font-weight: 700;
-      padding: 4px 6px 6px;
-      border-bottom: 1px solid #2a3240;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .opt-item {
-      display: block;
-      width: 100%;
-      text-align: left;
-      background: transparent;
-      color: inherit;
-      border: 0;
-      border-radius: 5px;
-      padding: 7px 8px;
-      font-size: 13px;
-      cursor: pointer;
-      box-sizing: border-box;
-    }
-    .opt-item.kbd-focus, .opt-item:focus {
-      outline: none;
-      background: #2f6fed;
-      color: #fff;
-    }
-    .opt-item.confirm {
-      background: #b42318;
-      color: #fff;
-    }
-    #softkeys {
-      position: fixed;
-      left: 0; right: 0; bottom: 0;
-      height: 26px;
-      background: #181d26;
-      border-top: 1px solid #2c3545;
-      color: #e6ecf5;
-      display: flex;
-      align-items: center;
-      padding: 0 6px;
-      font-size: 11px;
-      line-height: 1;
-      z-index: 50;
-      box-sizing: border-box;
-      user-select: none;
-    }
-    .sk-btn {
-      flex: 1 1 33%;
-      background: transparent;
-      border: 0;
-      color: inherit;
-      font: inherit;
-      padding: 4px 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      cursor: pointer;
-    }
-    #sk-left { text-align: left; font-weight: 600; }
-    #sk-center { text-align: center; font-weight: 700; text-transform: uppercase; font-size: 11px; }
-    #sk-right { text-align: right; font-weight: 600; }
-
-    @media (max-width: 360px), (max-height: 360px) {
-      html, body {
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
+  <script src="https://shifat100.github.io/key-simulator/Keysim-min.js"></script>
+  <script>
+    window.addEventListener('back', function (event) {
+      event.preventDefault();
+      if (typeof simulateNaturalPress === 'function') {
+        simulateNaturalPress('SoftRight', 0);
       }
-      body {
-        display: flex;
-        flex-direction: column;
-        padding-bottom: 26px;
-        box-sizing: border-box;
-      }
-      header {
-        flex: 0 0 auto;
-        padding: 4px 8px !important;
-        min-height: 28px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        box-sizing: border-box;
-      }
-      header h1 {
-        font-size: 15px !important;
-        margin: 0 !important;
-        line-height: 1.2 !important;
-      }
-      header .actions {
-        display: flex !important;
-        align-items: center !important;
-      }
-      header .actions > * {
-        margin-left: 4px !important;
-      }
-      header .ghost-btn, header .btn {
-        padding: 3px 7px !important;
-        font-size: 11px !important;
-        line-height: 1.2 !important;
-        border-radius: 5px !important;
-      }
-      #apps {
-        flex: 1 1 auto !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        padding: 4px 6px 8px !important;
-        display: flex !important;
-        flex-wrap: wrap !important;
-        align-content: flex-start !important;
-        box-sizing: border-box;
-      }
-      #apps .app {
-        position: relative;
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        width: 100% !important;
-        min-height: 40px !important;
-        height: auto !important;
-        padding: 5px 6px !important;
-        margin: 0 0 4px 0 !important;
-        box-sizing: border-box !important;
-        text-align: left !important;
-        border-radius: 6px !important;
-      }
-      #apps .app .icon {
-        flex: 0 0 32px !important;
-        width: 32px !important;
-        height: 32px !important;
-        margin: 0 8px 0 0 !important;
-        font-size: 15px !important;
-        line-height: 32px !important;
-      }
-      #apps .app .app-meta {
-        flex: 1 1 auto;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-      }
-      #apps .app .name, #apps .app .vendor {
-        display: block !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        text-align: left !important;
-        margin: 0 !important;
-        max-width: 100% !important;
-      }
-      #apps .app .name { font-size: 13px !important; line-height: 1.2 !important; }
-      #apps .app .vendor { font-size: 10px !important; line-height: 1.2 !important; opacity: 0.72; }
-      #apps .app .more {
-        flex: 0 0 auto;
-        position: static !important;
-        padding: 2px 5px !important;
-        margin-left: 4px !important;
-        font-size: 14px !important;
-      }
-      #empty {
-        padding: 16px 12px !important;
-        font-size: 13px !important;
-        text-align: center;
-      }
-      #about-box {
-        padding: 6px 6px 32px !important;
-        box-sizing: border-box;
-      }
-      #about-box .about {
-        width: 100% !important;
-        max-width: 100% !important;
-        max-height: 100% !important;
-        overflow-y: auto !important;
-        padding: 8px 10px !important;
-        font-size: 12px !important;
-        line-height: 1.35 !important;
-        box-sizing: border-box;
-      }
-      #about-box ul {
-        padding-left: 16px !important;
-        margin: 6px 0 !important;
-      }
-      #about-box li { margin-bottom: 4px !important; }
-    }
-
-    @media (min-width: 280px) and (max-width: 360px) and (max-height: 280px) {
-      header { min-height: 26px !important; padding: 3px 8px !important; }
-      #softkeys { height: 24px; }
-      body { padding-bottom: 24px; }
-      #apps { padding: 4px !important; }
-      #apps .app {
-        width: 49% !important;
-        margin-bottom: 4px !important;
-        padding: 4px 5px !important;
-        min-height: 36px !important;
-      }
-      #apps .app:nth-child(odd) { margin-right: 2% !important; }
-      #apps .app .icon {
-        flex: 0 0 26px !important;
-        width: 26px !important;
-        height: 26px !important;
-        line-height: 26px !important;
-        margin-right: 6px !important;
-        font-size: 13px !important;
-      }
-      #apps .app .more { display: none !important; }
-    }
-
-    body.kaios-ui #apps .app .more { display: none !important; }
-  </style>
+    });
+  </script>
   <script src="config/i18n.js"></script>
 </head>
-<body>
+<body class="kaios-ui">
   <header>
     <h1>J2ME</h1>
-    <div class="actions">
-      <button id="about" class="ghost-btn" type="button" title="Об эмуляторе" data-en-title="About">?</button>
-      <label class="btn"><span data-en="Add .jar">Добавить .jar</span><input id="upload" type="file" accept=".jar" multiple hidden></label>
-    </div>
+    <input id="upload" type="file" accept=".jar" multiple hidden>
   </header>
   <div id="t9-bar" hidden></div>
   <main id="apps"></main>
@@ -273,25 +28,22 @@
   <div id="about-box" hidden>
     <div class="about" tabindex="-1">
       <div class="about-head">
-        <b data-en="J2ME in the browser">J2ME в браузере</b>
-        <button class="about-close" type="button" title="Закрыть" data-en-title="Close">✕</button>
+        <b data-en="J2ME KaiOS">J2ME KaiOS</b>
       </div>
-      <p data-en="An emulator of games and apps for keypad phones (Java ME, MIDP 2.0). Runs right in the browser on a computer or a smartphone.">Эмулятор игр и приложений для кнопочных телефонов (Java ME, MIDP 2.0). Работает прямо в браузере — на компьютере и смартфоне.</p>
+      <p data-en="Java ME (MIDP 2.0) emulator built for KaiOS keypad phones.">Эмулятор Java ME (MIDP 2.0) для кнопочных телефонов KaiOS.</p>
       <ul>
-        <li data-en="Add a .jar with the button or drop the file — it is stored in this browser.">Добавьте .jar кнопкой или перетащите файл — он сохранится в этом браузере.</li>
-        <li data-en="⋮ or Right Softkey: clear data, reset settings, delete.">⋮ или правая софт-клавиша — очистить данные, сбросить настройки, удалить.</li>
-        <li data-en="KaiOS / T9 keypad: D-pad & OK — joystick, LSK/RSK — soft keys, 0–9 * # — digits, Backspace — C, Call (or LSK+RSK) — game settings.">KaiOS / T9: крестовина и OK — джойстик, LSK/RSK — софт-клавиши, 0–9 * # — цифры, Backspace — C, Вызов (или LSK+RSK) — настройки игры.</li>
-        <li data-en="PC keyboard: arrows and Enter — joystick, Q/E — soft keys, 0–9 * # — digits, Backspace — C, Esc — Back, F10 — settings.">Клавиатура ПК: стрелки и Enter — джойстик, Q/E — софт-клавиши, 0–9 * # — цифры, Backspace — C, Esc — Назад, F10 — настройки.</li>
-        <li data-en="Bluetooth games are played online: create a room and send its name and password to a friend.">Bluetooth-игры работают по сети: создайте комнату и передайте другу её название и пароль.</li>
+        <li data-en="Launcher: D-Pad — select, OK — launch, LSK/Esc — Add .jar, RSK/Back — Options, 0–9 — T9 search.">Список: крестовина — выбор, OK — запуск, LSK/Esc — добавить .jar, RSK/Назад — опции, 0–9 — T9 поиск.</li>
+        <li data-en="In game: D-Pad & OK — joystick, LSK/Esc — Left softkey, RSK/Back — Right softkey, 0–9 * # — keypad, Backspace — C.">В игре: крестовина и OK — джойстик, LSK/Esc — левая софт-клавиша, RSK/Назад — правая софт-клавиша, 0–9 * # — цифры, Backspace — C.</li>
+        <li data-en="Settings & fullscreen resolution: press Call (or LSK+RSK / F10 / Tab) in game to set 128×160, 240×320, 320×240 or any custom screen in Fullscreen.">Настройки и полный экран: нажмите Вызов (или LSK+RSK / F10 / Tab) в игре — можно выбрать 128×160, 240×320, 320×240 или любой размер на весь экран.</li>
       </ul>
       <p class="about-foot" data-en="Based on pluotsorbet by Mozilla.">Основан на pluotsorbet от Mozilla.</p>
     </div>
   </div>
-  <p id="empty" hidden data-en="Add a .jar with the button above or drop a file here.">Добавьте .jar кнопкой выше или перетащите файл сюда.</p>
-  <footer id="softkeys" hidden>
-    <button id="sk-left" class="sk-btn" type="button"></button>
-    <button id="sk-center" class="sk-btn" type="button"></button>
-    <button id="sk-right" class="sk-btn" type="button"></button>
+  <p id="empty" hidden data-en="Press Left Softkey (or Esc) to add a .jar file.">Нажмите левую софт-клавишу (или Esc), чтобы добавить .jar.</p>
+  <footer id="softkeys">
+    <span id="sk-left" class="sk-l"></span>
+    <span id="sk-center" class="sk-c"></span>
+    <span id="sk-right" class="sk-r"></span>
   </footer>
   <script src="config/settings.js"></script>
   <script src="config/localjars.js"></script>

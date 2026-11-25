@@ -1,17 +1,10 @@
 var Settings = (function () {
   var GLOBAL = "j2me.settings";
   var GAME = "j2me.game.";
-  var isKaiOS = /\bKAIOS\b/i.test(navigator.userAgent || "");
-  var sw = (typeof screen !== "undefined" && screen.width) || window.innerWidth || 0;
-  var sh = (typeof screen !== "undefined" && screen.height) || window.innerHeight || 0;
-  var iw = window.innerWidth || sw;
-  var ih = window.innerHeight || sh;
-  var tiny = (Math.min(sw, sh) <= 280 && Math.max(sw, sh) <= 360) || (Math.min(iw, ih) <= 280 && Math.max(iw, ih) <= 360);
-  var phone = window.matchMedia && matchMedia("(pointer: coarse)").matches && Math.min(sw, sh) < 800;
   var DEFAULTS = {
     screen: "auto",
-    scale: (isKaiOS || tiny) ? "1" : "2",
-    keypad: (isKaiOS || tiny) ? "0" : (phone ? "1" : "3"),
+    scale: "100",
+    keypad: "0",
     rotate: "0",
     fps: "0",
     jit: "1",
@@ -29,7 +22,17 @@ var Settings = (function () {
   var OPTIONS = {
     scale: {
       label: tr("Масштаб", "Scale"),
-      items: [["0.5", "×0.5"], ["0.75", "×0.75"], ["1", "×1"], ["1.5", "×1.5"], ["2", "×2"], ["3", "×3"], ["99", tr("Максимальный", "Maximum")]]
+      items: [
+        ["100", tr("На весь экран (пропорц.)", "Fullscreen (Fit)")],
+        ["101", tr("Растянуть на весь экран", "Fullscreen (Stretch)")],
+        ["1", "×1"],
+        ["0.5", "×0.5"],
+        ["0.75", "×0.75"],
+        ["1.5", "×1.5"],
+        ["2", "×2"],
+        ["3", "×3"],
+        ["99", tr("Максимальный", "Maximum")]
+      ]
     },
     rotate: {
       label: tr("Поворот", "Rotation"),
@@ -37,7 +40,7 @@ var Settings = (function () {
     },
     keypad: {
       label: tr("Клавиатура", "Keypad"),
-      items: [["0", tr("Скрыта", "Hidden")], ["1", tr("Маленькая", "Small")], ["2", tr("Средняя", "Medium")], ["3", tr("Большая", "Large")], ["4", tr("Огромная", "Huge")]]
+      items: [["0", tr("Скрыта", "Hidden")]]
     },
     fps: {
       label: tr("Частота кадров", "Frame rate"),

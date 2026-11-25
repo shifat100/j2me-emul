@@ -6,12 +6,10 @@
   var aboutCard = about.querySelector(".about");
   var optMenu = document.getElementById("opt-menu");
   var t9Bar = document.getElementById("t9-bar");
-  var skBar = document.getElementById("softkeys");
   var skLeft = document.getElementById("sk-left");
   var skCenter = document.getElementById("sk-center");
   var skRight = document.getElementById("sk-right");
 
-  var PTR_DOWN = "PointerEvent" in window ? "pointerdown" : "mousedown";
   var T9_MAP = {
     "0": "0 ",
     "1": "1._-",
@@ -45,20 +43,6 @@
   function cssEscape(value) {
     if (window.CSS && CSS.escape) return CSS.escape(value);
     return String(value).replace(/([^\w-])/g, "\\$1");
-  }
-
-  function isKaiOSMode() {
-    var uaKai = /\bKAIOS\b/i.test(navigator.userAgent || "");
-    var w = window.innerWidth || 0;
-    var h = window.innerHeight || 0;
-    return uaKai || (Math.min(w, h) <= 280 && Math.max(w, h) <= 360);
-  }
-
-  function updateUIProfile() {
-    var compact = isKaiOSMode();
-    document.body.classList.toggle("kaios-ui", compact);
-    skBar.hidden = !compact;
-    updateSoftkeys();
   }
 
   function allTiles() {
@@ -115,11 +99,10 @@
   }
 
   function updateSoftkeys() {
-    if (skBar.hidden) return;
     if (!about.hidden) {
-      skLeft.textContent = "";
-      skCenter.textContent = tr("ЗАКРЫТЬ", "CLOSE");
-      skRight.textContent = tr("Назад", "Back");
+      skLeft.textContent = tr("Назад", "Back");
+      skCenter.textContent = "";
+      skRight.textContent = tr("Закрыть", "Close");
       return;
     }
     if (menuState) {
@@ -130,7 +113,7 @@
     }
     skLeft.textContent = tr("Добавить", "Add .jar");
     skCenter.textContent = apps.children.length ? tr("ОТКРЫТЬ", "OPEN") : tr("ДОБАВИТЬ", "ADD");
-    skRight.textContent = apps.children.length ? tr("Опции", "Options") : tr("О сайте", "About");
+    skRight.textContent = apps.children.length ? tr("Опции", "Options") : tr("Справка", "About");
   }
 
   function tile(info, local) {
@@ -161,7 +144,7 @@
     a.addEventListener("focus", function () {
       setFocusedTile(a, false);
     });
-    append(a, img, meta, menuButton(a, info, local));
+    append(a, img, meta);
     return a;
   }
 
@@ -192,13 +175,11 @@
   }
 
   function addMenuAction(box, items, label, confirmLabel, action) {
-    var item = document.createElement("button");
-    item.type = "button";
+    var item = document.createElement("div");
+    item.tabIndex = 0;
     item.className = "opt-item";
     item.textContent = label;
-    item.addEventListener("click", function (e) {
-      e.preventDefault();
-      e.stopPropagation();
+    item._activate = function () {
       if (confirmLabel && !item.classList.contains("confirm")) {
         item.classList.add("confirm");
         item.textContent = confirmLabel;
@@ -206,6 +187,10 @@
       }
       closeMenu();
       action();
+    };
+    item.addEventListener("click", function (e) {
+      e.preventDefault();
+      item._activate();
     });
     box.appendChild(item);
     items.push(item);
@@ -217,7 +202,7 @@
     box.className = "opt-box";
     var title = document.createElement("div");
     title.className = "opt-title";
-    title.textContent = info ? info.name : tr("Меню", "Menu");
+    title.textContent = info ? info.name : tr("Опции", "Options");
     box.appendChild(title);
 
     var items = [];
@@ -226,16 +211,16 @@
       addMenuAction(box, items, tr("Открыть", "Open"), null, function () {
         a.click();
       });
-      addMenuAction(box, items, tr("Очистить данные", "Clear data"), tr("Точно очистить?", "Clear data?"), function () {
+      addMenuAction(box, items, tr("Очистить данные", "Clear data"), tr("Точно очистить? (OK)", "Clear data? (OK)"), function () {
         LocalJars.clearData(jar);
       });
       if (Object.keys(Settings.game(LocalJars.storageId(info.file))).length) {
-        addMenuAction(box, items, tr("Сбросить настройки", "Reset settings"), tr("Точно сбросить?", "Reset settings?"), function () {
+        addMenuAction(box, items, tr("Сбросить настройки", "Reset settings"), tr("Точно сбросить? (OK)", "Reset settings? (OK)"), function () {
           Settings.resetGame(LocalJars.storageId(info.file));
         });
       }
       if (local) {
-        addMenuAction(box, items, tr("Удалить", "Delete"), tr("Точно удалить?", "Delete?"), function () {
+        addMenuAction(box, items, tr("Удалить", "Delete"), tr("Точно удалить? (OK)", "Delete? (OK)"), function () {
           remove(a, info.file, jar);
         });
       }
@@ -253,21 +238,6 @@
     menuState = { box: box, items: items, idx: 0 };
     focusMenuIndex(0);
     updateSoftkeys();
-  }
-
-  function menuButton(a, info, local) {
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "more";
-    btn.title = tr("Действия", "Actions");
-    btn.textContent = "⋮";
-    btn.addEventListener("click", function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      setFocusedTile(a, false);
-      openOptionsFor(a, info, local);
-    });
-    return btn;
   }
 
   function remove(a, file, jar) {
@@ -289,13 +259,6 @@
     });
   }
 
-  var menuBackdrop = false;
-  optMenu.addEventListener(PTR_DOWN, function (e) { menuBackdrop = e.target === optMenu; });
-  optMenu.addEventListener("click", function (e) {
-    if (e.target === optMenu && menuBackdrop) closeMenu();
-  });
-
-  var aboutBackdrop = false;
   function toggleAbout(open) {
     about.hidden = !open;
     updateSoftkeys();
@@ -311,12 +274,6 @@
       }
     }
   }
-  document.getElementById("about").addEventListener("click", function () { toggleAbout(true); });
-  about.querySelector(".about-close").addEventListener("click", function () { toggleAbout(false); });
-  about.addEventListener(PTR_DOWN, function (e) { aboutBackdrop = e.target === about; });
-  about.addEventListener("click", function (e) {
-    if (e.target === about && aboutBackdrop) toggleAbout(false);
-  });
 
   function navigateApps(dir) {
     var list = allTiles();
@@ -340,13 +297,11 @@
     }
 
     if (dir === "left") {
-      idx = (idx - 1 + list.length) % list.length;
-      setFocusedTile(list[idx], true);
+      setFocusedTile(list[(idx - 1 + list.length) % list.length], true);
       return;
     }
     if (dir === "right") {
-      idx = (idx + 1) % list.length;
-      setFocusedTile(list[idx], true);
+      setFocusedTile(list[(idx + 1) % list.length], true);
       return;
     }
 
@@ -363,9 +318,7 @@
         bestIdx = i;
       }
     }
-    if (bestIdx < 0) {
-      bestIdx = dir === "down" ? 0 : list.length - 1;
-    }
+    if (bestIdx < 0) bestIdx = dir === "down" ? 0 : list.length - 1;
     setFocusedTile(list[bestIdx], true);
   }
 
@@ -433,20 +386,6 @@
     uploadInput.click();
   }
 
-  function activateSoftCenter() {
-    if (!about.hidden) {
-      toggleAbout(false);
-      return;
-    }
-    if (menuState) {
-      menuState.items[menuState.idx].click();
-      return;
-    }
-    var cur = ensureSelection();
-    if (cur) cur.click();
-    else uploadInput.click();
-  }
-
   function activateSoftRight() {
     if (!about.hidden) {
       toggleAbout(false);
@@ -465,11 +404,7 @@
     }
   }
 
-  skLeft.addEventListener("click", activateSoftLeft);
-  skCenter.addEventListener("click", activateSoftCenter);
-  skRight.addEventListener("click", activateSoftRight);
-
-  document.addEventListener("keydown", function (e) {
+  window.addEventListener("keydown", function (e) {
     if (e.key === "EndCall" || e.key === "MicrophoneToggle") return;
 
     if (!about.hidden) {
@@ -479,7 +414,7 @@
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         aboutCard.scrollTop -= 36;
-      } else if (e.key === "Escape" || e.key === "Backspace" || e.key === "SoftRight" || e.key === "SoftLeft" || e.key === "Enter") {
+      } else if (e.key === "SoftLeft" || e.key === "Escape" || e.key === "SoftRight" || e.key === "Backspace" || e.key === "Enter") {
         e.preventDefault();
         toggleAbout(false);
       }
@@ -495,15 +430,15 @@
         focusMenuIndex(menuState.idx - 1);
       } else if (e.key === "Enter") {
         e.preventDefault();
-        activateSoftCenter();
-      } else if (e.key === "Escape" || e.key === "Backspace" || e.key === "SoftRight" || e.key === "SoftLeft") {
+        menuState.items[menuState.idx]._activate();
+      } else if (e.key === "SoftLeft" || e.key === "Escape" || e.key === "SoftRight" || e.key === "Backspace") {
         e.preventDefault();
         closeMenu();
       }
       return;
     }
 
-    if (e.key === "SoftLeft" || e.code === "KeyQ") {
+    if (e.key === "SoftLeft" || e.key === "Escape" || e.code === "KeyQ") {
       e.preventDefault();
       activateSoftLeft();
       return;
@@ -534,13 +469,10 @@
       return;
     }
     if (e.key === "Enter") {
-      var active = document.activeElement;
-      if (active && (active.id === "about" || active.classList.contains("btn") || active.classList.contains("more"))) return;
+      e.preventDefault();
       var cur = ensureSelection();
-      if (cur) {
-        e.preventDefault();
-        cur.click();
-      }
+      if (cur) cur.click();
+      else uploadInput.click();
       return;
     }
     if (e.key >= "0" && e.key <= "9" && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -568,10 +500,6 @@
       e.preventDefault();
       t9Query = t9Query.slice(0, -1);
       runT9Search(false);
-      return;
-    }
-    if (e.key === "Escape") {
-      clearT9();
     }
   });
 
@@ -592,7 +520,7 @@
       LocalJars.add(file).then(function (info) {
         var added = tile(info, true);
         place(added);
-        setFocusedTile(added, isKaiOSMode());
+        setFocusedTile(added, true);
       }).catch(function () {
         if (old && pending.parentNode) apps.replaceChild(old, pending);
         else pending.remove();
@@ -618,8 +546,7 @@
     upload(e.dataTransfer.files);
   });
 
-  window.addEventListener("resize", updateUIProfile);
-  updateUIProfile();
+  updateSoftkeys();
 
   Promise.all([
     LocalJars.list().catch(function () {
@@ -640,9 +567,7 @@
       apps.appendChild(tile(info, false));
     });
     refreshEmpty();
-    if (isKaiOSMode()) {
-      var first = ensureSelection();
-      if (first) setFocusedTile(first, true);
-    }
+    var first = ensureSelection();
+    if (first) setFocusedTile(first, true);
   });
 })();
